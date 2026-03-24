@@ -1,0 +1,83 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
+import FitnessChart from '@/components/FitnessChart';
+import BalanceChart from '@/components/BalanceChart';
+import ActivityList from '@/components/ActivityList';
+
+const USER_ID = 1;
+
+export default function Dashboard() {
+  const [summary, setSummary] = useState(null);
+  const [fitness, setFitness] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.summary(USER_ID),
+      api.fitness(USER_ID),
+      api.activities(USER_ID, 10),
+    ]).then(([s, f, a]) => {
+      setSummary(s);
+      setFitness(f);
+      setActivities(a);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="text-gray-500 text-center py-20">加载中...</div>;
+
+  const { ctl, atl, tsb } = summary?.fitness ?? {};
+  const balance = summary?.balance_28d ?? {};
+
+  return (
+    <div className="space-y-8">
+      {/* 体能状态卡片 */}
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="体能 CTL" value={ctl?.toFixed(1)} desc="慢性训练负荷" color="text-blue-400" />
+        <StatCard label="疲劳 ATL" value={atl?.toFixed(1)} desc="急性训练负荷" color="text-orange-400" />
+        <StatCard
+          label="状态 TSB"
+          value={tsb?.toFixed(1)}
+          desc={tsb >= 0 ? '状态良好，可以比赛' : '疲劳积累，注意恢复'}
+          color={tsb >= 0 ? 'text-green-400' : 'text-red-400'}
+        />
+      </div>
+
+      {/* CTL/ATL/TSB 趋势图 */}
+      <Section title="体能趋势（近 90 天）">
+        <FitnessChart data={fitness} />
+      </Section>
+
+      {/* 三项训练量平衡 */}
+      <Section title="训练量分布（近 28 天）">
+        <BalanceChart balance={balance} />
+      </Section>
+
+      {/* 最近活动 */}
+      <Section title="最近训练">
+        <ActivityList activities={activities} />
+      </Section>
+    </div>
+  );
+}
+
+function StatCard({ label, value, desc, color }) {
+  return (
+    <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+      <div className="text-gray-400 text-sm mb-1">{label}</div>
+      <div className={`text-4xl font-bold ${color}`}>{value ?? '--'}</div>
+      <div className="text-gray-500 text-xs mt-1">{desc}</div>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+      <h2 className="text-gray-300 font-semibold mb-4">{title}</h2>
+      {children}
+    </div>
+  );
+}
