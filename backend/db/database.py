@@ -4,13 +4,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from config import settings
 
-# 确保 data 目录存在
-os.makedirs("data", exist_ok=True)
+db_url = settings.sqlalchemy_database_url
+is_sqlite = db_url.startswith("sqlite")
 
-engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False}  # SQLite 需要
-)
+if is_sqlite:
+    os.makedirs("data", exist_ok=True)
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(db_url)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -18,7 +19,9 @@ Base = declarative_base()
 
 
 def run_migrations():
-    """手动添加新列（SQLite 不支持 ALTER TABLE ADD COLUMN IF NOT EXISTS，需检查后添加）"""
+    """手动添加新列（仅 SQLite 需要，PostgreSQL 由 create_all 处理）"""
+    if not is_sqlite:
+        return
     with engine.connect() as conn:
         result = conn.execute(text("PRAGMA table_info(activities)"))
         existing_cols = {row[1] for row in result}

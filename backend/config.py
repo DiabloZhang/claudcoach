@@ -14,6 +14,16 @@ class Settings(BaseSettings):
 
     poll_interval_minutes: int = 60  # 定时轮询间隔，可在 .env 中设置 POLL_INTERVAL_MINUTES=30
 
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        """Railway 提供的 DATABASE_URL 是 postgresql:// 格式，SQLAlchemy 需要 postgresql+psycopg2://"""
+        url = self.database_url
+        if url.startswith("postgres://"):
+            return url.replace("postgres://", "postgresql+psycopg2://", 1)
+        if url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return url
+
     class Config:
         env_file = "../.env"
 
