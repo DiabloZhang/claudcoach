@@ -55,7 +55,7 @@ async def callback(code: str, db: Session = Depends(get_db)):
     return RedirectResponse(f"{settings.frontend_url}?auth=success&user_id={user.id}")
 
 
-@router.post("/sync/{user_id}")
+@router.get("/sync/{user_id}")
 async def sync(user_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """触发历史数据同步（后台执行，不阻塞请求）"""
     user = db.query(User).filter(User.id == user_id).first()
