@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, Integer, BigInteger, String, Float, DateTime, Text, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from db.database import Base
@@ -35,7 +35,7 @@ class Activity(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    strava_id = Column(Integer, unique=True, nullable=False)
+    strava_id = Column(BigInteger, unique=True, nullable=False)
 
     # 基础信息
     name = Column(String)
