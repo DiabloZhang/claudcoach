@@ -88,6 +88,8 @@ def get_activities(user_id: int, limit: int = 20, db: Session = Depends(get_db))
             "avg_heart_rate": a.avg_heart_rate,
             "avg_power": a.avg_power,
             "tss": a.tss,
+            "is_excluded": a.is_excluded,
+            "exclude_reason": a.exclude_reason,
         }
         for a in activities
     ]

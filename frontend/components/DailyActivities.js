@@ -100,13 +100,16 @@ function DayGroup({ date, activities }) {
           {activities.map(a => {
             const c = SPORT_COLOR[a.sport_type] ?? { text: 'text-gray-300' };
             const dist = formatDistance(a.distance, a.sport_type);
+            const excluded = a.is_excluded;
             return (
-              <div key={a.id} className="flex items-center gap-2">
-                <span className="text-base flex-shrink-0">{SPORT_EMOJI[a.sport_type] ?? '🏅'}</span>
+              <div key={a.id} className={`flex items-center gap-2 ${excluded ? 'opacity-40' : ''}`}>
+                <span className="text-base flex-shrink-0">{excluded ? '⚠️' : (SPORT_EMOJI[a.sport_type] ?? '🏅')}</span>
                 <div className="min-w-0">
-                  <div className={`text-sm truncate ${c.text}`}>{a.name}</div>
+                  <div className={`text-sm truncate ${excluded ? 'line-through text-gray-500' : c.text}`}>{a.name}</div>
                   <div className="text-gray-500 text-xs">
-                    {[dist, formatDuration(a.moving_time)].filter(Boolean).join(' · ')}
+                    {excluded
+                      ? (a.exclude_reason ?? '异常数据，已排除')
+                      : [dist, formatDuration(a.moving_time)].filter(Boolean).join(' · ')}
                   </div>
                 </div>
               </div>
