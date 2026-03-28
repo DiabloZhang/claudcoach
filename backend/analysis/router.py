@@ -22,7 +22,7 @@ router = APIRouter(prefix="/analysis", tags=["analysis"])
 # 计算并保存所有活动的 TSS
 # ─────────────────────────────────────────
 
-@router.post("/calculate-tss/{user_id}")
+@router.get("/calculate-tss/{user_id}")
 def calculate_tss(user_id: int, db: Session = Depends(get_db)):
     """
     为该用户所有活动计算 TSS 并写入数据库。
