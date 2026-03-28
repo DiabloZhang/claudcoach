@@ -36,8 +36,8 @@ export default function CoachPage() {
       const res = await api.coachMessage(convId, text);
       setMessages(prev => [...prev, { role: 'coach', content: res.reply }]);
       if (res.is_complete) setDone(true);
-    } catch {
-      setMessages(prev => [...prev, { role: 'coach', content: '网络出错，请重试。' }]);
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'coach', content: `出错了：${e.message}` }]);
     } finally {
       setSending(false);
     }

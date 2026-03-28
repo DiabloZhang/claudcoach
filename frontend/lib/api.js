@@ -12,7 +12,11 @@ async function apiPost(path, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
   return res.json();
 }
 

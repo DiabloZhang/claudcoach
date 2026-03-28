@@ -127,7 +127,13 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
         if conv.activity_id:
             activity = db.query(Activity).filter_by(id=conv.activity_id).first()
 
-        first_msg = build_first_message(user, persona, db, activity, ctl, atl, tsb)
+        try:
+            first_msg = build_first_message(user, persona, db, activity, ctl, atl, tsb)
+        except Exception as e:
+            first_msg = f"你好，{user.firstname or '运动员'}！我是你的教练 {persona.name}，跟我聊聊最近的训练吧。"
+            import logging
+            logging.error(f"Coach first message failed: {e}")
+
         msg = Message(conversation_id=conv.id, role="coach", content=first_msg)
         db.add(msg)
         conv.status = "active"
@@ -168,7 +174,12 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
     db.commit()
 
     # 调用 Claude
-    reply, is_done = chat(conv, body.content, user, persona, db, ctl, atl, tsb)
+    try:
+        reply, is_done = chat(conv, body.content, user, persona, db, ctl, atl, tsb)
+    except Exception as e:
+        import logging
+        logging.error(f"Coach chat failed: {e}")
+        raise HTTPException(500, f"教练暂时无法回复：{str(e)}")
 
     # 存教练回复
     db.add(Message(conversation_id=conv.id, role="coach", content=reply))
