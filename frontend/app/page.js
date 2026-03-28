@@ -14,6 +14,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [chartHeight, setChartHeight] = useState(420);
+
+  const heightOptions = [
+    { label: '矮', value: 420 },
+    { label: '中', value: 840 },
+    { label: '高', value: 1680 },
+    { label: '超高', value: 2520 },
+  ];
 
   const loadData = () => {
     setLoading(true);
@@ -81,8 +89,20 @@ export default function Dashboard() {
       </div>
 
       {/* CTL/ATL/TSB 趋势图 */}
-      <Section title="体能趋势（近 90 天）">
-        <FitnessChart data={fitness} />
+      <Section title="体能趋势（近 90 天）" extra={
+        <div className="flex gap-1">
+          {heightOptions.map(o => (
+            <button
+              key={o.label}
+              onClick={() => setChartHeight(o.value)}
+              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${chartHeight === o.value ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      }>
+        <FitnessChart data={fitness} height={chartHeight} />
       </Section>
 
       {/* 三项训练量平衡 */}
@@ -108,10 +128,13 @@ function StatCard({ label, value, desc, color }) {
   );
 }
 
-function Section({ title, children }) {
+function Section({ title, children, extra }) {
   return (
     <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-      <h2 className="text-gray-300 font-semibold mb-4">{title}</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-gray-300 font-semibold">{title}</h2>
+        {extra}
+      </div>
       {children}
     </div>
   );

@@ -4,14 +4,14 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 
-export default function FitnessChart({ data }) {
+export default function FitnessChart({ data, height = 420 }) {
   // 只展示有数据的部分（过滤掉全0的早期日期）
   const trimmed = data.filter(d => d.ctl > 0 || d.atl > 0);
   // 每7天取一个标签避免拥挤
   const filtered = trimmed.filter((_, i) => i % 7 === 0 || i === trimmed.length - 1);
 
   return (
-    <ResponsiveContainer width="100%" height={420}>
+    <ResponsiveContainer width="100%" height={height}>
       <LineChart data={trimmed} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
         <XAxis
