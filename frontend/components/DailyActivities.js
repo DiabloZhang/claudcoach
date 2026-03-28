@@ -40,12 +40,13 @@ function bubbleSize(tss) {
 }
 
 function SportBubbles({ activities }) {
-  // 按运动类型聚合 TSS
+  // 按运动类型聚合 TSS，异常活动 TSS 计为 0
   const byType = {};
   activities.forEach(a => {
+    if (a.is_excluded) return;  // 异常活动不计入气泡
     const key = a.sport_type;
     if (!byType[key]) byType[key] = { tss: 0, sport_type: key };
-    byType[key].tss += a.tss ?? 30;
+    byType[key].tss += a.tss ?? 0;
   });
 
   const bubbles = BUBBLE_ORDER
@@ -84,7 +85,8 @@ function SportBubbles({ activities }) {
 }
 
 function DayGroup({ date, activities }) {
-  const dayTss = activities.reduce((s, a) => s + (a.tss ?? 0), 0);
+  // 异常活动 TSS 计为 0
+  const dayTss = activities.reduce((s, a) => s + (a.is_excluded ? 0 : (a.tss ?? 0)), 0);
 
   return (
     <div className="border-b border-gray-800 last:border-0 py-4 last:pb-0">
@@ -102,13 +104,18 @@ function DayGroup({ date, activities }) {
             const dist = formatDistance(a.distance, a.sport_type);
             const excluded = a.is_excluded;
             return (
-              <div key={a.id} className={`flex items-center gap-2 ${excluded ? 'opacity-40' : ''}`}>
-                <span className="text-base flex-shrink-0">{excluded ? '⚠️' : (SPORT_EMOJI[a.sport_type] ?? '🏅')}</span>
-                <div className="min-w-0">
-                  <div className={`text-sm truncate ${excluded ? 'line-through text-gray-500' : c.text}`}>{a.name}</div>
+              <div key={a.id} className={`flex items-center gap-2 ${excluded ? 'opacity-50' : ''}`}>
+                <span className="text-base flex-shrink-0">{SPORT_EMOJI[a.sport_type] ?? '🏅'}</span>
+                <div className="min-w-0 flex-1">
+                  <div className={`text-sm truncate flex items-center gap-1.5 ${excluded ? 'text-gray-500' : c.text}`}>
+                    <span className={excluded ? 'line-through' : ''}>{a.name}</span>
+                    {excluded && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/60 text-red-400 font-medium flex-shrink-0">异常</span>
+                    )}
+                  </div>
                   <div className="text-gray-500 text-xs">
                     {excluded
-                      ? (a.exclude_reason ?? '异常数据，已排除')
+                      ? (a.exclude_reason ?? '异常数据，TSS 不计入统计')
                       : [dist, formatDuration(a.moving_time)].filter(Boolean).join(' · ')}
                   </div>
                 </div>
