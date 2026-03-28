@@ -44,8 +44,10 @@ export default function Dashboard() {
     setSyncMsg('');
     try {
       await api.sync(USER_ID);
-      // 等 5 秒让后台同步完成，再计算 TSS 并刷新
+      // 等 5 秒让后台同步完成
       await new Promise(r => setTimeout(r, 5000));
+      // 补扫异常 + 计算 TSS
+      await api.backfill(USER_ID);
       await api.calculateTss(USER_ID);
       await new Promise(r => setTimeout(r, 1000));
       loadData();
