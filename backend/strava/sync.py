@@ -53,6 +53,10 @@ def parse_activity(raw: dict, user_id: int) -> Activity:
     if raw.get("start_date"):
         start_date = datetime.strptime(raw["start_date"], "%Y-%m-%dT%H:%M:%SZ")
 
+    start_date_local = None
+    if raw.get("start_date_local"):
+        start_date_local = datetime.strptime(raw["start_date_local"], "%Y-%m-%dT%H:%M:%SZ")
+
     # 配速：秒/km（从 m/s 换算）
     avg_speed = raw.get("average_speed", 0)
     avg_pace = (1000 / avg_speed) if avg_speed > 0 else None
@@ -63,6 +67,7 @@ def parse_activity(raw: dict, user_id: int) -> Activity:
         name=raw.get("name"),
         sport_type=raw.get("sport_type") or raw.get("type"),
         start_date=start_date,
+        start_date_local=start_date_local,
         timezone=raw.get("timezone"),
         distance=raw.get("distance"),
         moving_time=raw.get("moving_time"),

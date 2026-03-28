@@ -6,14 +6,12 @@ const USER_ID = 1;
 
 function formatDateTime(iso) {
   if (!iso) return '--';
-  const d = new Date(new Date(iso).getTime() + 8 * 3600 * 1000);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return new Date(iso + 'Z').toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDate(iso) {
   if (!iso) return '--';
-  const d = new Date(new Date(iso).getTime() + 8 * 3600 * 1000);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  return new Date(iso + 'Z').toLocaleDateString('zh-CN');
 }
 
 export default function SyncLogs() {

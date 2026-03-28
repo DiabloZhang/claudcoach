@@ -15,9 +15,11 @@ const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六'];
 const BUBBLE_ORDER = ['Swim', 'OpenWaterSwim', 'Ride', 'VirtualRide', 'Run', 'TrailRun'];
 
 function localDate(iso) {
-  const d = new Date(new Date(iso).getTime() + 8 * 3600 * 1000);
+  // start_date_local 已经是用户当地时间，直接取前10位作为 key
+  const key = iso.slice(0, 10);
+  const d = new Date(iso);
   return {
-    key: d.toISOString().slice(0, 10),
+    key,
     label: `${d.getMonth() + 1}月${d.getDate()}日 周${WEEKDAY[d.getDay()]}`,
   };
 }
@@ -143,8 +145,9 @@ export default function DailyActivities({ activities }) {
   const groups = {};
   const order = [];
   activities.forEach(a => {
-    if (!a.start_date) return;
-    const { key, label } = localDate(a.start_date);
+    const dateStr = a.start_date_local || a.start_date;
+    if (!dateStr) return;
+    const { key, label } = localDate(dateStr);
     if (!groups[key]) { groups[key] = { label, items: [] }; order.push(key); }
     groups[key].items.push(a);
   });

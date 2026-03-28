@@ -56,8 +56,9 @@ export default function FitnessChart({ data, height = 420, activities = [] }) {
   // 按日期建索引（取 start_date 前10位 YYYY-MM-DD）
   const activitiesByDate = {};
   activities.forEach(a => {
-    if (!a.start_date) return;
-    const d = a.start_date.slice(0, 10);
+    const dateStr = a.start_date_local || a.start_date;
+    if (!dateStr) return;
+    const d = dateStr.slice(0, 10);
     if (!activitiesByDate[d]) activitiesByDate[d] = [];
     activitiesByDate[d].push(a);
   });

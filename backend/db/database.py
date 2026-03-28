@@ -28,6 +28,7 @@ def run_migrations():
                 "is_excluded": "ALTER TABLE activities ADD COLUMN is_excluded BOOLEAN DEFAULT 0",
                 "exclude_reason": "ALTER TABLE activities ADD COLUMN exclude_reason VARCHAR",
                 "tss_adjusted": "ALTER TABLE activities ADD COLUMN tss_adjusted FLOAT DEFAULT 0.0",
+                "start_date_local": "ALTER TABLE activities ADD COLUMN start_date_local DATETIME",
             }
             for col, sql in new_cols.items():
                 if col not in existing_cols:
@@ -38,6 +39,7 @@ def run_migrations():
                 "ALTER TABLE activities ADD COLUMN IF NOT EXISTS is_excluded BOOLEAN DEFAULT false",
                 "ALTER TABLE activities ADD COLUMN IF NOT EXISTS exclude_reason VARCHAR",
                 "ALTER TABLE activities ADD COLUMN IF NOT EXISTS tss_adjusted FLOAT DEFAULT 0.0",
+                "ALTER TABLE activities ADD COLUMN IF NOT EXISTS start_date_local TIMESTAMP",
             ]
             for sql in migrations:
                 conn.execute(text(sql))

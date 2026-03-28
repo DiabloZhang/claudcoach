@@ -40,7 +40,8 @@ class Activity(Base):
     # 基础信息
     name = Column(String)
     sport_type = Column(String)   # Swim / Ride / Run / VirtualRide 等
-    start_date = Column(DateTime)
+    start_date = Column(DateTime)        # UTC
+    start_date_local = Column(DateTime)  # 用户当地时间（展示用）
     timezone = Column(String)
 
     # 运动数据
