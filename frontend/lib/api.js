@@ -13,4 +13,6 @@ export const api = {
   summary: (userId) => apiFetch(`/analysis/summary/${userId}`),
   balance: (userId) => apiFetch(`/analysis/balance/${userId}`),
   hrZones: (userId, activityId) => apiFetch(`/analysis/hr-zones/${userId}/${activityId}`),
+  sync: (userId) => apiFetch(`/auth/sync/${userId}`),
+  calculateTss: (userId) => apiFetch(`/analysis/calculate-tss/${userId}`),
 };

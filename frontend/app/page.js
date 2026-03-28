@@ -12,8 +12,11 @@ export default function Dashboard() {
   const [fitness, setFitness] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
     Promise.all([
       api.summary(USER_ID),
       api.fitness(USER_ID),
@@ -24,7 +27,27 @@ export default function Dashboard() {
       setActivities(a);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      await api.sync(USER_ID);
+      // 等 5 秒让后台同步完成，再计算 TSS 并刷新
+      await new Promise(r => setTimeout(r, 5000));
+      await api.calculateTss(USER_ID);
+      await new Promise(r => setTimeout(r, 1000));
+      loadData();
+      setSyncMsg('同步完成');
+    } catch {
+      setSyncMsg('同步失败，请重试');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   if (loading) return <div className="text-gray-500 text-center py-20">加载中...</div>;
 
@@ -33,6 +56,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* 顶部操作栏 */}
+      <div className="flex justify-end items-center gap-3">
+        {syncMsg && <span className="text-sm text-gray-400">{syncMsg}</span>}
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium transition-colors"
+        >
+          {syncing ? '同步中...' : '立即同步'}
+        </button>
+      </div>
+
       {/* 体能状态卡片 */}
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="体能 CTL" value={ctl?.toFixed(1)} desc="慢性训练负荷" color="text-blue-400" />
