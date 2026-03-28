@@ -168,10 +168,10 @@ claudcoach/
   - 跑步阈值估算：最近30天跑步平均配速 × 0.9
 - 估算值加 "~" 标记，提示用户仅供参考，建议通过实测校准
 
-#### Step 6 — 定时轮询 `复杂度：低`
-- [ ] 每小时自动拉取 Strava 最新活动
-- [ ] 新活动入库并触发指标计算
-- [ ] 替代 Webhook，本地无需公网地址
+#### Step 6 — 定时轮询 `复杂度：低` ✅
+- [x] 每小时自动拉取 Strava 最新活动（APScheduler，间隔可配置）
+- [x] 新活动入库并触发指标计算
+- [x] 替代 Webhook，本地无需公网地址
 
 #### Step 7 — 前端骨架 `复杂度：低中` ✅
 - [x] Next.js 初始化
@@ -188,8 +188,16 @@ claudcoach/
 ---
 
 ### Phase 2 — 云端 + 分析深化
-- [ ] VPS 部署支持（docker-compose.cloud.yml）
-- [ ] Webhook 实时接收 Strava 推送
+
+#### Phase 2a — Railway 云端部署 ✅（2026-03-26 完成）
+- [x] SQLite → PostgreSQL 迁移（Railway 免费 PG）
+- [x] 后端部署：https://claudcoach-production.up.railway.app
+- [x] 前端部署：https://claudcoachfrontend-production.up.railway.app
+- [x] Strava OAuth 云端授权，数据同步到 PG
+- [x] Dashboard 增强：立即同步按钮、体能图高度切换（矮/中/高/超高）、悬浮显示当日训练
+
+#### Phase 2b — 分析深化（待开始）
+- [ ] Webhook 实时接收 Strava 推送（替代轮询）
 - [ ] 心率 / 功率区间详细分析
 - [ ] 训练日志详情页
 - [ ] 功率曲线（Power-Duration Curve）

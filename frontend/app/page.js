@@ -102,7 +102,7 @@ export default function Dashboard() {
           ))}
         </div>
       }>
-        <FitnessChart data={fitness} height={chartHeight} />
+        <FitnessChart data={fitness} height={chartHeight} activities={activities} />
       </Section>
 
       {/* 三项训练量平衡 */}
