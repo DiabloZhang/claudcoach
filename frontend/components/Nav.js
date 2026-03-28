@@ -6,6 +6,7 @@ const links = [
   { href: '/', label: 'Dashboard' },
   { href: '/activities', label: '训练记录' },
   { href: '/coach', label: 'AI 教练' },
+  { href: '/sync-logs', label: '同步记录' },
 ];
 
 export default function Nav() {

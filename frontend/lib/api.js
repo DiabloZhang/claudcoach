@@ -14,6 +14,8 @@ export const api = {
   balance: (userId) => apiFetch(`/analysis/balance/${userId}`),
   hrZones: (userId, activityId) => apiFetch(`/analysis/hr-zones/${userId}/${activityId}`),
   sync: (userId) => apiFetch(`/auth/sync/${userId}`),
+  syncFrom: (userId, since) => apiFetch(`/auth/sync/${userId}?since=${since}`),
+  syncLogs: (userId) => apiFetch(`/auth/sync-logs/${userId}`),
   backfill: (userId) => apiFetch(`/analysis/anomalies/${userId}/backfill`),
   calculateTss: (userId) => apiFetch(`/analysis/calculate-tss/${userId}`),
 };

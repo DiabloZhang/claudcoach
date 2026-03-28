@@ -81,6 +81,21 @@ class Activity(Base):
     streams = relationship("Stream", back_populates="activity", cascade="all, delete-orphan")
 
 
+class SyncLog(Base):
+    __tablename__ = "sync_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    sync_from = Column(DateTime)          # 从哪个时间点开始同步
+    activities_synced = Column(Integer, default=0)
+    activities_skipped = Column(Integer, default=0)
+    strava_api_calls = Column(Integer, default=0)
+    duration_seconds = Column(Float)
+    status = Column(String, default="success")   # success / error
+    error_message = Column(String)
+
+
 class Stream(Base):
     __tablename__ = "streams"
 

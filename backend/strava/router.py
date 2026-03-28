@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from datetime import datetime
 from db.database import get_db
-from db.models import User
+from db.models import User, SyncLog
 from strava.client import get_authorization_url, exchange_code, get_athlete
 from strava.sync import sync_user_activities
 from config import settings
@@ -56,13 +57,43 @@ async def callback(code: str, db: Session = Depends(get_db)):
 
 
 @router.get("/sync/{user_id}")
-async def sync(user_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """触发历史数据同步（后台执行，不阻塞请求）"""
+async def sync(user_id: int, background_tasks: BackgroundTasks, since: str = None, db: Session = Depends(get_db)):
+    """
+    触发数据同步（后台执行）。
+    since: 可选，格式 YYYY-MM-DD，从指定日期开始同步；不填则从最新活动时间起。
+    """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    background_tasks.add_task(sync_user_activities, user, db)
-    return {"message": "同步已开始，请稍后查看活动列表"}
+    since_dt = datetime.strptime(since, "%Y-%m-%d") if since else None
+    background_tasks.add_task(sync_user_activities, user, db, since_dt)
+    return {"message": "同步已开始", "since": since or "最新活动时间起"}
+
+
+@router.get("/sync-logs/{user_id}")
+def get_sync_logs(user_id: int, limit: int = 20, db: Session = Depends(get_db)):
+    """获取同步历史记录"""
+    logs = (
+        db.query(SyncLog)
+        .filter(SyncLog.user_id == user_id)
+        .order_by(SyncLog.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": l.id,
+            "started_at": l.started_at,
+            "sync_from": l.sync_from,
+            "activities_synced": l.activities_synced,
+            "activities_skipped": l.activities_skipped,
+            "strava_api_calls": l.strava_api_calls,
+            "duration_seconds": l.duration_seconds,
+            "status": l.status,
+            "error_message": l.error_message,
+        }
+        for l in logs
+    ]
 
 
 @router.get("/activities/{user_id}")

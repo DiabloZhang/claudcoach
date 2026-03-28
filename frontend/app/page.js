@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [syncDate, setSyncDate] = useState('');
   const [chartHeight, setChartHeight] = useState(420);
 
   const heightOptions = [
@@ -39,14 +40,16 @@ export default function Dashboard() {
 
   useEffect(() => { loadData(); }, []);
 
-  const handleSync = async () => {
+  const runSync = async (since = null) => {
     setSyncing(true);
     setSyncMsg('');
     try {
-      await api.sync(USER_ID);
-      // 等 5 秒让后台同步完成
+      if (since) {
+        await api.syncFrom(USER_ID, since);
+      } else {
+        await api.sync(USER_ID);
+      }
       await new Promise(r => setTimeout(r, 5000));
-      // 补扫异常 + 计算 TSS
       await api.backfill(USER_ID);
       await api.calculateTss(USER_ID);
       await new Promise(r => setTimeout(r, 1000));
@@ -67,10 +70,23 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* 顶部操作栏 */}
-      <div className="flex justify-end items-center gap-3">
+      <div className="flex justify-end items-center gap-3 flex-wrap">
         {syncMsg && <span className="text-sm text-gray-400">{syncMsg}</span>}
+        <input
+          type="date"
+          value={syncDate}
+          onChange={e => setSyncDate(e.target.value)}
+          className="bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2"
+        />
         <button
-          onClick={handleSync}
+          onClick={() => syncDate ? runSync(syncDate) : alert('请选择日期')}
+          disabled={syncing}
+          className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium transition-colors"
+        >
+          同步指定日期
+        </button>
+        <button
+          onClick={() => runSync()}
           disabled={syncing}
           className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium transition-colors"
         >

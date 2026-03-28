@@ -1,7 +1,8 @@
 import httpx
+import time
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from db.models import User, Activity, Stream
+from db.models import User, Activity, Stream, SyncLog
 from strava.client import STRAVA_API_BASE, refresh_access_token, is_token_expired
 from analysis.anomalies import detect_anomalies
 
@@ -95,61 +96,92 @@ def parse_stream(raw: dict, activity_id: int) -> Stream:
     )
 
 
-async def sync_user_activities(user: User, db: Session) -> dict:
+async def sync_user_activities(user: User, db: Session, since: datetime = None) -> dict:
     """
-    同步用户全部历史活动（断点续传：跳过已存在的 strava_id）
-    返回同步统计
+    同步用户活动。since 指定从哪个时间点开始，默认从最新活动时间起。
+    返回同步统计（含 Strava API 调用次数）。
     """
+    started_at = datetime.utcnow()
+    t0 = time.time()
     token = await get_valid_token(user, db)
+    api_calls = 0
 
-    # 只拉 2026 年以来的数据
-    after = int(datetime(2026, 1, 1).timestamp())
+    # 确定同步起点
+    if since is None:
+        latest = db.query(Activity).filter(
+            Activity.user_id == user.id
+        ).order_by(Activity.start_date.desc()).first()
+        since = latest.start_date if latest else datetime(2026, 1, 1)
+
+    after = int(since.timestamp())
+    sync_from = since
 
     synced = 0
     skipped = 0
     page = 1
 
-    while True:
-        raw_activities = await fetch_activities_page(token, page, after)
-        if not raw_activities:
-            break  # 没有更多数据
+    try:
+        while True:
+            raw_activities = await fetch_activities_page(token, page, after)
+            api_calls += 1
+            if not raw_activities:
+                break
 
-        for raw in raw_activities:
-            strava_id = raw["id"]
+            for raw in raw_activities:
+                strava_id = raw["id"]
 
-            # 断点续传：已存在则跳过
-            exists = db.query(Activity).filter(
-                Activity.strava_id == strava_id
-            ).first()
-            if exists:
-                skipped += 1
-                continue
+                exists = db.query(Activity).filter(
+                    Activity.strava_id == strava_id
+                ).first()
+                if exists:
+                    skipped += 1
+                    continue
 
-            # 保存 activity
-            activity = parse_activity(raw, user.id)
+                activity = parse_activity(raw, user.id)
 
-            # 自动检测异常，异常活动 tss_adjusted=0
-            reasons = detect_anomalies(activity)
-            if reasons:
-                activity.is_excluded = True
-                activity.exclude_reason = "；".join(reasons)
-                activity.tss_adjusted = 0.0
+                reasons = detect_anomalies(activity)
+                if reasons:
+                    activity.is_excluded = True
+                    activity.exclude_reason = "；".join(reasons)
+                    activity.tss_adjusted = 0.0
 
-            db.add(activity)
-            db.flush()  # 获取 activity.id
+                db.add(activity)
+                db.flush()
 
-            # 拉取并保存 streams
-            try:
-                raw_streams = await fetch_streams(token, strava_id)
-                if raw_streams:
-                    stream = parse_stream(raw_streams, activity.id)
-                    db.add(stream)
-            except Exception:
-                pass  # stream 失败不影响 activity 保存
+                try:
+                    raw_streams = await fetch_streams(token, strava_id)
+                    api_calls += 1
+                    if raw_streams:
+                        stream = parse_stream(raw_streams, activity.id)
+                        db.add(stream)
+                except Exception:
+                    pass
 
-            db.commit()
-            synced += 1
+                db.commit()
+                synced += 1
 
-        page += 1
+            page += 1
 
-    return {"synced": synced, "skipped": skipped}
+        status = "success"
+        error_message = None
+    except Exception as e:
+        status = "error"
+        error_message = str(e)
+
+    duration = time.time() - t0
+
+    log = SyncLog(
+        user_id=user.id,
+        started_at=started_at,
+        sync_from=sync_from,
+        activities_synced=synced,
+        activities_skipped=skipped,
+        strava_api_calls=api_calls,
+        duration_seconds=round(duration, 1),
+        status=status,
+        error_message=error_message,
+    )
+    db.add(log)
+    db.commit()
+
+    return {"synced": synced, "skipped": skipped, "api_calls": api_calls, "duration": round(duration, 1)}
