@@ -29,6 +29,11 @@ function formatDuration(sec) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+function tssPerHour(activity) {
+  if (!activity.tss || !activity.moving_time || activity.moving_time < 900) return null;
+  return activity.tss / (activity.moving_time / 3600);
+}
+
 function formatDistance(m, type) {
   if (!m) return null;
   if (type === 'Swim' || type === 'OpenWaterSwim') return `${Math.round(m)}m`;
@@ -107,10 +112,13 @@ function DayGroup({ date, activities }) {
               <div key={a.id} className={`flex items-center gap-2 ${excluded ? 'opacity-50' : ''}`}>
                 <span className="text-base flex-shrink-0">{SPORT_EMOJI[a.sport_type] ?? '🏅'}</span>
                 <div className="min-w-0 flex-1">
-                  <div className={`text-sm truncate flex items-center gap-1.5 ${excluded ? 'text-gray-500' : c.text}`}>
-                    <span className={excluded ? 'line-through' : ''}>{a.name}</span>
+                  <div className={`text-sm flex items-center gap-1.5 flex-wrap ${excluded ? 'text-gray-500' : c.text}`}>
+                    <span className={`truncate ${excluded ? 'line-through' : ''}`}>{a.name}</span>
                     {excluded && (
                       <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/60 text-red-400 font-medium flex-shrink-0">异常</span>
+                    )}
+                    {!excluded && tssPerHour(a) > 100 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-400 font-medium flex-shrink-0" title={`TSS/小时 = ${tssPerHour(a).toFixed(0)}，超过100说明阈值可能设置偏低`}>阈值偏低?</span>
                     )}
                   </div>
                   <div className="text-gray-500 text-xs">
