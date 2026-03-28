@@ -240,6 +240,8 @@ claudcoach/
 #### 睡眠时间与定时触发
 - `User.sleep_time`：用户本地睡眠时间，默认 22:00，**教练在对话中问，不填表**
 - `User.timezone`：用户时区，正式存库（当前用户 Asia/Shanghai）
+- 每日日志两个字段：`coach_note`（教练自动生成）+ `user_note`（用户可选补充，不写就空）
+  - user_note 通过对话收集：教练收尾时问"今天还有什么想记下来的吗？"，不强制
 - 每日日志：每天 sleep_time 写（同时作为入睡提醒）
 - 周总结：周日 sleep_time 写
 - 月总结：月最后一天 sleep_time 写
