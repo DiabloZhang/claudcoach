@@ -6,6 +6,16 @@ async function apiFetch(path) {
   return res.json();
 }
 
+async function apiPost(path, body) {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 export const api = {
   health: () => apiFetch('/health'),
   activities: (userId, limit = 20) => apiFetch(`/auth/activities/${userId}?limit=${limit}`),
@@ -18,4 +28,6 @@ export const api = {
   syncLogs: (userId) => apiFetch(`/auth/sync-logs/${userId}`),
   backfill: (userId) => apiFetch(`/analysis/anomalies/${userId}/backfill`),
   calculateTss: (userId) => apiFetch(`/analysis/calculate-tss/${userId}`),
+  coachOpen: (userId) => apiFetch(`/coach/open/${userId}`),
+  coachMessage: (convId, content) => apiPost(`/coach/message/${convId}`, { content }),
 };

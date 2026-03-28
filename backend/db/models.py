@@ -96,6 +96,50 @@ class SyncLog(Base):
     error_message = Column(String)
 
 
+class CoachPersona(Base):
+    __tablename__ = "coach_personas"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    name = Column(String, default="Coach Alex")
+    personality = Column(Text, default="专业、直接但温暖的铁三教练，有15年执教经验")
+    style = Column(String, default="专业但不冷漠，会用具体数据支撑建议")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=True)  # 关联的训练（可选）
+    trigger = Column(String, default="activity_review")  # activity_review / weekly / alert / chat
+    status = Column(String, default="pending")  # pending / active / complete
+    # 提取的结构化数据
+    training_type = Column(String)   # interval / tempo / aerobic / recovery / long
+    rpe = Column(Integer)            # 1-10
+    body_status = Column(String)     # normal / fatigue / pain / sick
+    life_stress = Column(String)     # none / mild / significant
+    notes = Column(Text)             # 对话摘要
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages = relationship("Message", back_populates="conversation", order_by="Message.id")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
+    role = Column(String, nullable=False)   # "coach" / "user"
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    conversation = relationship("Conversation", back_populates="messages")
+
+
 class Stream(Base):
     __tablename__ = "streams"
 

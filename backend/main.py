@@ -8,6 +8,7 @@ from db.database import engine, Base, run_migrations
 import db.models  # noqa: F401 — 注册所有模型，确保建表
 from strava.router import router as strava_router
 from analysis.router import router as analysis_router
+from ai_coach.router import router as coach_router
 from strava.poller import run_poll
 
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.include_router(strava_router)
 app.include_router(analysis_router)
+app.include_router(coach_router)
 
 
 @app.get("/health")
