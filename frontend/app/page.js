@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import FitnessChart from '@/components/FitnessChart';
 import BalanceChart from '@/components/BalanceChart';
-import ActivityList from '@/components/ActivityList';
+import DailyActivities from '@/components/DailyActivities';
 
 const USER_ID = 1;
 
@@ -28,7 +28,7 @@ export default function Dashboard() {
     Promise.all([
       api.summary(USER_ID),
       api.fitness(USER_ID),
-      api.activities(USER_ID, 10),
+      api.activities(USER_ID, 30),
     ]).then(([s, f, a]) => {
       setSummary(s);
       setFitness(f);
@@ -110,9 +110,9 @@ export default function Dashboard() {
         <BalanceChart balance={balance} />
       </Section>
 
-      {/* 最近活动 */}
+      {/* 最近活动（按天分组） */}
       <Section title="最近训练">
-        <ActivityList activities={activities} />
+        <DailyActivities activities={activities} />
       </Section>
     </div>
   );
