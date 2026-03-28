@@ -205,6 +205,15 @@ claudcoach/
 
 ### Phase 3 — AI 教练
 
+> 教练完整能力清单见 [docs/coach-capabilities.md](docs/coach-capabilities.md)
+
+#### 用户 2026 赛季
+| 日期 | 赛事 | 类型 |
+|------|------|------|
+| 4.26 | 广德113 | Half IM（113km）|
+| 9.13 | 大理 IM 70.3 | Half IM |
+| 10.4 | IM Barcelona | Full IM |
+
 #### 核心设计原则
 - **用户只负责去训练**，其他（记录/分析/提醒/计划）全是教练的事
 - 教练**主动**找用户，不等用户发问
