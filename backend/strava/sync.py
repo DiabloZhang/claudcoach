@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from db.models import User, Activity, Stream
 from strava.client import STRAVA_API_BASE, refresh_access_token, is_token_expired
+from analysis.anomalies import detect_anomalies
 
 STREAM_KEYS = "time,heartrate,watts,velocity_smooth,cadence,altitude,distance"
 SYNC_DAYS = 30  # 只同步最近 N 天
@@ -126,6 +127,14 @@ async def sync_user_activities(user: User, db: Session) -> dict:
 
             # 保存 activity
             activity = parse_activity(raw, user.id)
+
+            # 自动检测异常，异常活动 tss_adjusted=0
+            reasons = detect_anomalies(activity)
+            if reasons:
+                activity.is_excluded = True
+                activity.exclude_reason = "；".join(reasons)
+                activity.tss_adjusted = 0.0
+
             db.add(activity)
             db.flush()  # 获取 activity.id
 

@@ -73,6 +73,7 @@ class Activity(Base):
     # 数据质量
     is_excluded = Column(Boolean, default=False)   # True = 脏数据，排除出计算
     exclude_reason = Column(String)                # 排除原因（自动检测 or 手动）
+    tss_adjusted = Column(Float, default=0.0)      # 异常数据的修正 TSS（默认0，未来可人工修正为估算值）
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

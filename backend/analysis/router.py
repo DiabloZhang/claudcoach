@@ -72,17 +72,20 @@ def get_fitness(user_id: int, days: int = 90, db: Session = Depends(get_db)):
 
     activities = (
         db.query(Activity)
-        .filter(Activity.user_id == user_id, Activity.tss.isnot(None), Activity.is_excluded == False)
+        .filter(Activity.user_id == user_id)
         .all()
     )
 
-    # 按日期汇总当天 TSS
+    # 按日期汇总当天有效 TSS（异常活动用 tss_adjusted，默认0）
     daily_tss: dict[date, float] = {}
     for a in activities:
         if not a.start_date:
             continue
+        effective = a.tss_adjusted if a.is_excluded else a.tss
+        if effective is None:
+            continue
         d = a.start_date.date() if hasattr(a.start_date, "date") else a.start_date
-        daily_tss[d] = daily_tss.get(d, 0.0) + (a.tss or 0.0)
+        daily_tss[d] = daily_tss.get(d, 0.0) + effective
 
     result = calc_ctl_atl_tsb(daily_tss, end_date=date.today(), days=days)
     return result
@@ -205,13 +208,16 @@ def get_summary(user_id: int, db: Session = Depends(get_db)):
 
     activities = db.query(Activity).filter(Activity.user_id == user_id).all()
 
-    # 体能状态（最新一天，排除脏数据）
+    # 体能状态（异常活动用 tss_adjusted，默认0）
     daily_tss: dict[date, float] = {}
     for a in activities:
-        if not a.start_date or a.tss is None or a.is_excluded:
+        if not a.start_date:
+            continue
+        effective = a.tss_adjusted if a.is_excluded else a.tss
+        if effective is None:
             continue
         d = a.start_date.date() if hasattr(a.start_date, "date") else a.start_date
-        daily_tss[d] = daily_tss.get(d, 0.0) + a.tss
+        daily_tss[d] = daily_tss.get(d, 0.0) + effective
 
     fitness_series = calc_ctl_atl_tsb(daily_tss, end_date=date.today(), days=90)
     latest_fitness = fitness_series[-1] if fitness_series else {"ctl": 0, "atl": 0, "tsb": 0}
@@ -294,6 +300,41 @@ def include_activity(user_id: int, activity_id: int, db: Session = Depends(get_d
     db.commit()
 
     return {"message": f"活动 {activity_id} 已恢复，请重新运行 calculate-tss 更新数据"}
+
+
+@router.get("/anomalies/{user_id}/backfill")
+def backfill_anomalies(user_id: int, db: Session = Depends(get_db)):
+    """
+    补扫历史活动：检测异常并排除，已排除的补填 tss_adjusted=0。
+    新部署后运行一次即可。
+    """
+    activities = db.query(Activity).filter(Activity.user_id == user_id).all()
+    newly_excluded = []
+    patched = 0
+
+    for a in activities:
+        # 已排除但 tss_adjusted 为空的，补填0
+        if a.is_excluded and a.tss_adjusted is None:
+            a.tss_adjusted = 0.0
+            patched += 1
+            continue
+        # 未排除的，重新检测
+        if not a.is_excluded:
+            reasons = detect_anomalies(a)
+            if reasons:
+                a.is_excluded = True
+                a.exclude_reason = "；".join(reasons)
+                a.tss_adjusted = 0.0
+                a.tss = None
+                newly_excluded.append({"id": a.id, "name": a.name, "reasons": reasons})
+
+    db.commit()
+    return {
+        "message": "历史数据补扫完成",
+        "newly_excluded": len(newly_excluded),
+        "patched_tss_adjusted": patched,
+        "details": newly_excluded,
+    }
 
 
 @router.post("/anomalies/{user_id}/auto-exclude")
