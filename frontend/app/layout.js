@@ -14,7 +14,7 @@ export default function RootLayout({ children }) {
     <html lang="zh">
       <body className={`${geist.className} bg-gray-950 text-gray-100 min-h-screen`}>
         <Nav />
-        <main className="max-w-6xl mx-auto px-4 py-8">
+        <main className="max-w-6xl mx-auto px-4 py-6 pb-24 sm:py-8 sm:pb-8">
           {children}
         </main>
       </body>

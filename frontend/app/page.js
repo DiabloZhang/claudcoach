@@ -20,8 +20,6 @@ export default function Dashboard() {
   const heightOptions = [
     { label: '矮', value: 420 },
     { label: '中', value: 840 },
-    { label: '高', value: 1680 },
-    { label: '超高', value: 2520 },
   ];
 
   const loadData = () => {
@@ -95,7 +93,7 @@ export default function Dashboard() {
       </div>
 
       {/* 体能状态卡片 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard label="体能 CTL" value={ctl?.toFixed(1)} desc="慢性训练负荷" color="text-blue-400" />
         <StatCard label="疲劳 ATL" value={atl?.toFixed(1)} desc="急性训练负荷" color="text-orange-400" />
         <StatCard

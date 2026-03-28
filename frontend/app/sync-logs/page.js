@@ -40,9 +40,9 @@ export default function SyncLogs() {
               <th className="text-left px-4 py-3">同步时间</th>
               <th className="text-left px-4 py-3">从哪天起</th>
               <th className="text-right px-4 py-3">新增</th>
-              <th className="text-right px-4 py-3">跳过</th>
-              <th className="text-right px-4 py-3">API 调用</th>
-              <th className="text-right px-4 py-3">耗时</th>
+              <th className="hidden sm:table-cell text-right px-4 py-3">跳过</th>
+              <th className="hidden sm:table-cell text-right px-4 py-3">API 调用</th>
+              <th className="hidden sm:table-cell text-right px-4 py-3">耗时</th>
               <th className="text-right px-4 py-3">状态</th>
             </tr>
           </thead>
@@ -52,9 +52,9 @@ export default function SyncLogs() {
                 <td className="px-4 py-3 text-gray-300">{formatDateTime(log.started_at)}</td>
                 <td className="px-4 py-3 text-gray-400">{formatDate(log.sync_from)}</td>
                 <td className="px-4 py-3 text-right text-green-400">{log.activities_synced}</td>
-                <td className="px-4 py-3 text-right text-gray-500">{log.activities_skipped}</td>
-                <td className="px-4 py-3 text-right text-blue-400">{log.strava_api_calls}</td>
-                <td className="px-4 py-3 text-right text-gray-400">{log.duration_seconds}s</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{log.activities_skipped}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-blue-400">{log.strava_api_calls}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-400">{log.duration_seconds}s</td>
                 <td className="px-4 py-3 text-right">
                   {log.status === 'success'
                     ? <span className="text-green-400">✓</span>
