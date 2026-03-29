@@ -44,9 +44,15 @@ def _call_gemini(task: LLMTask, system: str, messages: list[dict]) -> str:
     client = genai.Client(api_key=settings.gemini_api_key)
     model = MODELS["gemini"][task]
 
-    # 转换消息格式
+    # Gemini 要求对话必须以 user 开头，过滤掉开头的 assistant 消息
+    filtered = list(messages)
+    while filtered and filtered[0]["role"] != "user":
+        filtered = filtered[1:]
+    if not filtered:
+        filtered = messages[-1:]  # 至少保留最后一条
+
     contents = []
-    for msg in messages:
+    for msg in filtered:
         role = "user" if msg["role"] == "user" else "model"
         contents.append(genai_types.Content(
             role=role,
