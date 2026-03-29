@@ -107,6 +107,7 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
 
     persona = get_or_create_persona(user_id, db)
     ctl, atl, tsb = _get_fitness_values(user_id, db)
+    model_used = None
 
     # 找最老的 pending 对话
     conv = (db.query(Conversation)
