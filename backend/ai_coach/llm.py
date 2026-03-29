@@ -101,7 +101,7 @@ def call_llm(task: LLMTask, system: str, messages: list[dict]) -> tuple[str, str
         text = callers[primary](task, system, messages)
         return text, MODELS[primary][task]
     except Exception as e:
-        logger.warning(f"LLM primary ({primary}/{MODELS[primary][task]}) failed: {e}, trying fallback...")
+        logger.error(f"LLM primary ({primary}/{MODELS[primary][task]}) failed: {e}, trying fallback...")
 
     # 降级 provider
     try:
