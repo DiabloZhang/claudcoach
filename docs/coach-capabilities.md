@@ -106,7 +106,25 @@
 
 ---
 
-## 九、待讨论能力
+## 九、LLM 技术方案
+
+### 多 Provider 支持
+- 主力：Gemini（`GEMINI_API_KEY`，Google AI Studio）
+- 备用：Claude（`ANTHROPIC_API_KEY`），Gemini 失败自动切换
+- `LLM_PROVIDER=gemini`（Railway 环境变量，改为 anthropic 可全切换）
+- Coach 界面显示当前使用的模型名
+
+### 三档任务模型分配
+
+| 档位 | 场景 | Primary | Fallback |
+|------|------|---------|---------|
+| **THINK** | 训练计划、周月总结、深度建议 | `gemini-3-pro-preview` | `claude-sonnet-4-6` |
+| **CHAT** | 日常对话、训练复盘 | `gemini-2.5-flash` | `claude-sonnet-4-6` |
+| **EXTRACT** | 结构化数据提取、日志生成 | `gemini-2.5-flash` | `claude-haiku-4-5` |
+
+---
+
+## 十、待讨论能力
 
 - 周训练计划生成与执行跟踪
 - 营养与补给建议
