@@ -127,7 +127,7 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
         if conv.activity_id:
             activity = db.query(Activity).filter_by(id=conv.activity_id).first()
 
-        model_used = None
+        model_used = "fallback"
         try:
             first_msg, model_used = build_first_message(user, persona, db, activity, ctl, atl, tsb)
         except Exception as e:

@@ -6,7 +6,7 @@
 import logging
 from enum import Enum
 import anthropic
-import google.genai as genai
+from google import genai
 from google.genai import types as genai_types
 from config import settings
 
