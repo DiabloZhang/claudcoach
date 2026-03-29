@@ -6,10 +6,38 @@ from db.models import User, Activity, Conversation, Message, CoachPersona
 from ai_coach.coach import (
     get_or_create_persona, build_first_message, chat, extract_structured_data
 )
+from ai_coach.llm import call_llm, LLMTask
+from config import settings
 from datetime import date
 import math
+import traceback
 
 router = APIRouter(prefix="/coach", tags=["coach"])
+
+
+@router.get("/debug")
+def debug_llm():
+    """诊断 LLM 配置和连通性"""
+    result = {
+        "llm_provider": settings.llm_provider,
+        "gemini_api_key_set": bool(settings.gemini_api_key),
+        "anthropic_api_key_set": bool(settings.anthropic_api_key),
+        "gemini_test": None,
+        "gemini_error": None,
+    }
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+        client = genai.Client(api_key=settings.gemini_api_key)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[genai_types.Content(role="user", parts=[genai_types.Part(text="say hi")])],
+            config=genai_types.GenerateContentConfig(max_output_tokens=20),
+        )
+        result["gemini_test"] = resp.text
+    except Exception as e:
+        result["gemini_error"] = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+    return result
 
 
 def _get_fitness_values(user_id: int, db: Session):
