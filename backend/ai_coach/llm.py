@@ -1,0 +1,104 @@
+"""
+统一 LLM 调用层
+- 三档任务：THINK / CHAT / EXTRACT
+- 优先 Gemini，失败自动切 Claude
+"""
+import logging
+from enum import Enum
+import anthropic
+import google.genai as genai
+from google.genai import types as genai_types
+from config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class LLMTask(Enum):
+    THINK = "think"      # 训练计划、周月总结、深度建议
+    CHAT = "chat"        # 教练日常对话、训练复盘
+    EXTRACT = "extract"  # 结构化数据提取、日志生成
+
+
+# 各档任务的模型映射
+MODELS = {
+    "gemini": {
+        LLMTask.THINK:   "gemini-3-pro-preview",
+        LLMTask.CHAT:    "gemini-2.5-flash",
+        LLMTask.EXTRACT: "gemini-2.5-flash",
+    },
+    "anthropic": {
+        LLMTask.THINK:   "claude-sonnet-4-6",
+        LLMTask.CHAT:    "claude-sonnet-4-6",
+        LLMTask.EXTRACT: "claude-haiku-4-5-20251001",
+    },
+}
+
+MAX_TOKENS = {
+    LLMTask.THINK:   2000,
+    LLMTask.CHAT:    600,
+    LLMTask.EXTRACT: 300,
+}
+
+
+def _call_gemini(task: LLMTask, system: str, messages: list[dict]) -> str:
+    client = genai.Client(api_key=settings.gemini_api_key)
+    model = MODELS["gemini"][task]
+
+    # 转换消息格式
+    contents = []
+    for msg in messages:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append(genai_types.Content(
+            role=role,
+            parts=[genai_types.Part(text=msg["content"])]
+        ))
+
+    response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=genai_types.GenerateContentConfig(
+            system_instruction=system,
+            max_output_tokens=MAX_TOKENS[task],
+        ),
+    )
+    return response.text
+
+
+def _call_anthropic(task: LLMTask, system: str, messages: list[dict]) -> str:
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    model = MODELS["anthropic"][task]
+
+    resp = client.messages.create(
+        model=model,
+        max_tokens=MAX_TOKENS[task],
+        system=system,
+        messages=messages,
+    )
+    return resp.content[0].text
+
+
+def call_llm(task: LLMTask, system: str, messages: list[dict]) -> str:
+    """
+    统一调用入口。优先用 settings.llm_provider，失败自动切另一个。
+    messages 格式：[{"role": "user"|"assistant", "content": "..."}]
+    """
+    primary = settings.llm_provider
+    fallback = "anthropic" if primary == "gemini" else "gemini"
+
+    callers = {
+        "gemini": _call_gemini,
+        "anthropic": _call_anthropic,
+    }
+
+    # 主力 provider
+    try:
+        return callers[primary](task, system, messages)
+    except Exception as e:
+        logger.warning(f"LLM primary ({primary}/{MODELS[primary][task]}) failed: {e}, trying fallback...")
+
+    # 降级 provider
+    try:
+        return callers[fallback](task, system, messages)
+    except Exception as e:
+        logger.error(f"LLM fallback ({fallback}/{MODELS[fallback][task]}) also failed: {e}")
+        raise RuntimeError(f"所有 LLM provider 均不可用：{e}")

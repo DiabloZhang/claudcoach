@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     strava_redirect_uri: str = "http://localhost:8000/auth/callback"
 
     anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+    llm_provider: str = "gemini"  # gemini | anthropic
 
     database_url: str = "sqlite:///./data/tricoach.db"
     secret_key: str = "change_this_to_a_random_secret"

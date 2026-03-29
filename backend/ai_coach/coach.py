@@ -1,11 +1,8 @@
 import json
-import anthropic
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from config import settings
 from db.models import User, Activity, Conversation, Message, CoachPersona
-
-client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+from ai_coach.llm import call_llm, LLMTask
 
 DONE_SIGNAL = "[DONE]"
 
@@ -39,7 +36,6 @@ def _format_activity(a: Activity) -> str:
 
 def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
                           activity: Activity = None, ctl=None, atl=None, tsb=None) -> str:
-    # 近7天训练
     week_ago = datetime.utcnow() - timedelta(days=7)
     recent = (db.query(Activity)
               .filter(Activity.user_id == user.id, Activity.start_date >= week_ago,
@@ -64,12 +60,9 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
 
     activity_str = ""
     if activity:
-        activity_str = f"""
-本次待复盘的训练：
-{_format_activity(activity)}
-"""
+        activity_str = f"\n本次待复盘的训练：\n{_format_activity(activity)}\n"
 
-    prompt = f"""你是{persona.name}，{persona.personality}。
+    return f"""你是{persona.name}，{persona.personality}。
 
 运动员档案：
 - 姓名：{user.firstname or '运动员'}
@@ -86,59 +79,37 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
 4. 总结完毕后在消息末尾加上 {DONE_SIGNAL}
 5. 用中文回复，口吻：{persona.style}"""
 
-    return prompt
-
 
 def build_first_message(user: User, persona: CoachPersona, db: Session,
-                         activity: Activity = None,
-                         ctl=None, atl=None, tsb=None) -> str:
+                         activity: Activity = None, ctl=None, atl=None, tsb=None) -> str:
     system = _build_system_prompt(user, persona, db, activity, ctl, atl, tsb)
+    trigger = "帮我看看这条训练数据，生成开场白（1-2句，自然，不要说'当然'之类的废话）" if activity \
+              else "主动找运动员聊聊最近状态，生成开场白（1-2句）"
 
-    if activity:
-        trigger = f"帮我看看这条训练数据，生成开场白（1-2句，自然，不要说'当然'之类的废话）"
-    else:
-        trigger = "主动找运动员聊聊最近状态，生成开场白（1-2句）"
-
-    resp = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=300,
-        system=system,
-        messages=[{"role": "user", "content": trigger}],
-    )
-    return resp.content[0].text
+    return call_llm(LLMTask.CHAT, system, [{"role": "user", "content": trigger}])
 
 
 def chat(conversation: Conversation, user_message: str,
          user: User, persona: CoachPersona, db: Session,
          ctl=None, atl=None, tsb=None) -> tuple[str, bool]:
-    """发送用户消息，返回 (教练回复, 是否结束)"""
     activity = None
     if conversation.activity_id:
         activity = db.query(Activity).filter_by(id=conversation.activity_id).first()
 
     system = _build_system_prompt(user, persona, db, activity, ctl, atl, tsb)
 
-    # 构建消息历史（只取 coach/user 角色，跳过系统触发消息）
     history = []
     for msg in conversation.messages:
         role = "assistant" if msg.role == "coach" else "user"
         history.append({"role": role, "content": msg.content})
     history.append({"role": "user", "content": user_message})
 
-    resp = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=600,
-        system=system,
-        messages=history,
-    )
-    reply = resp.content[0].text
+    reply = call_llm(LLMTask.CHAT, system, history)
     is_done = DONE_SIGNAL in reply
-    clean_reply = reply.replace(DONE_SIGNAL, "").strip()
-    return clean_reply, is_done
+    return reply.replace(DONE_SIGNAL, "").strip(), is_done
 
 
 def extract_structured_data(conversation: Conversation) -> dict:
-    """对话结束后提取结构化字段"""
     history = "\n".join(
         f"{'教练' if m.role == 'coach' else '运动员'}：{m.content}"
         for m in conversation.messages
@@ -156,13 +127,7 @@ def extract_structured_data(conversation: Conversation) -> dict:
   "notes": "一句话总结"
 }}"""
 
-    resp = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = resp.content[0].text.strip()
-    # 提取 JSON 块
+    text = call_llm(LLMTask.EXTRACT, "", [{"role": "user", "content": prompt}])
     if "```" in text:
         text = text.split("```")[1].replace("json", "").strip()
     try:
