@@ -86,7 +86,8 @@ def build_first_message(user: User, persona: CoachPersona, db: Session,
     trigger = "帮我看看这条训练数据，生成开场白（1-2句，自然，不要说'当然'之类的废话）" if activity \
               else "主动找运动员聊聊最近状态，生成开场白（1-2句）"
 
-    return call_llm(LLMTask.CHAT, system, [{"role": "user", "content": trigger}])
+    text, model = call_llm(LLMTask.CHAT, system, [{"role": "user", "content": trigger}])
+    return text, model
 
 
 def chat(conversation: Conversation, user_message: str,
@@ -104,9 +105,9 @@ def chat(conversation: Conversation, user_message: str,
         history.append({"role": role, "content": msg.content})
     history.append({"role": "user", "content": user_message})
 
-    reply = call_llm(LLMTask.CHAT, system, history)
+    reply, model = call_llm(LLMTask.CHAT, system, history)
     is_done = DONE_SIGNAL in reply
-    return reply.replace(DONE_SIGNAL, "").strip(), is_done
+    return reply.replace(DONE_SIGNAL, "").strip(), is_done, model
 
 
 def extract_structured_data(conversation: Conversation) -> dict:
@@ -127,7 +128,7 @@ def extract_structured_data(conversation: Conversation) -> dict:
   "notes": "一句话总结"
 }}"""
 
-    text = call_llm(LLMTask.EXTRACT, "", [{"role": "user", "content": prompt}])
+    text, _ = call_llm(LLMTask.EXTRACT, "", [{"role": "user", "content": prompt}])
     if "```" in text:
         text = text.split("```")[1].replace("json", "").strip()
     try:

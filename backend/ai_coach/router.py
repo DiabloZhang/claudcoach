@@ -127,8 +127,9 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
         if conv.activity_id:
             activity = db.query(Activity).filter_by(id=conv.activity_id).first()
 
+        model_used = None
         try:
-            first_msg = build_first_message(user, persona, db, activity, ctl, atl, tsb)
+            first_msg, model_used = build_first_message(user, persona, db, activity, ctl, atl, tsb)
         except Exception as e:
             first_msg = f"你好，{user.firstname or '运动员'}！我是你的教练 {persona.name}，跟我聊聊最近的训练吧。"
             import logging
@@ -144,6 +145,7 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
         "conversation_id": conv.id,
         "trigger": conv.trigger,
         "status": conv.status,
+        "model": model_used,
         "messages": [
             {"role": m.role, "content": m.content, "created_at": m.created_at}
             for m in conv.messages
@@ -173,9 +175,8 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
     db.add(Message(conversation_id=conv.id, role="user", content=body.content))
     db.commit()
 
-    # 调用 Claude
     try:
-        reply, is_done = chat(conv, body.content, user, persona, db, ctl, atl, tsb)
+        reply, is_done, model_used = chat(conv, body.content, user, persona, db, ctl, atl, tsb)
     except Exception as e:
         import logging
         logging.error(f"Coach chat failed: {e}")
@@ -204,6 +205,7 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
     return {
         "reply": reply,
         "is_complete": is_done,
+        "model": model_used,
     }
 
 

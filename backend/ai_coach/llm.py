@@ -77,10 +77,10 @@ def _call_anthropic(task: LLMTask, system: str, messages: list[dict]) -> str:
     return resp.content[0].text
 
 
-def call_llm(task: LLMTask, system: str, messages: list[dict]) -> str:
+def call_llm(task: LLMTask, system: str, messages: list[dict]) -> tuple[str, str]:
     """
     统一调用入口。优先用 settings.llm_provider，失败自动切另一个。
-    messages 格式：[{"role": "user"|"assistant", "content": "..."}]
+    返回 (reply_text, model_name_used)
     """
     primary = settings.llm_provider
     fallback = "anthropic" if primary == "gemini" else "gemini"
@@ -92,13 +92,15 @@ def call_llm(task: LLMTask, system: str, messages: list[dict]) -> str:
 
     # 主力 provider
     try:
-        return callers[primary](task, system, messages)
+        text = callers[primary](task, system, messages)
+        return text, MODELS[primary][task]
     except Exception as e:
         logger.warning(f"LLM primary ({primary}/{MODELS[primary][task]}) failed: {e}, trying fallback...")
 
     # 降级 provider
     try:
-        return callers[fallback](task, system, messages)
+        text = callers[fallback](task, system, messages)
+        return text, MODELS[fallback][task]
     except Exception as e:
         logger.error(f"LLM fallback ({fallback}/{MODELS[fallback][task]}) also failed: {e}")
         raise RuntimeError(f"所有 LLM provider 均不可用：{e}")

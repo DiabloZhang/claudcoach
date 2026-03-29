@@ -11,6 +11,7 @@ export default function CoachPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
+  const [model, setModel] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -18,6 +19,7 @@ export default function CoachPage() {
       setConvId(data.conversation_id);
       setMessages(data.messages);
       setDone(data.status === 'complete');
+      if (data.model) setModel(data.model);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -35,6 +37,7 @@ export default function CoachPage() {
     try {
       const res = await api.coachMessage(convId, text);
       setMessages(prev => [...prev, { role: 'coach', content: res.reply }]);
+      if (res.model) setModel(res.model);
       if (res.is_complete) setDone(true);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'coach', content: `出错了：${e.message}` }]);
@@ -57,6 +60,15 @@ export default function CoachPage() {
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* 模型指示器 */}
+      {model && (
+        <div className="flex justify-end pb-1">
+          <span className="text-xs text-gray-600 bg-gray-800/50 px-2 py-0.5 rounded-full">
+            {model}
+          </span>
+        </div>
+      )}
 
       {/* 输入区 */}
       {done ? (
