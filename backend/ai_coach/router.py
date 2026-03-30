@@ -137,14 +137,21 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
     ctl, atl, tsb = _get_fitness_values(user_id, db)
     model_used = None
 
-    # 找最老的 pending 对话
+    # 优先找最老的 pending 对话
     conv = (db.query(Conversation)
             .filter_by(user_id=user_id, status="pending")
             .order_by(Conversation.created_at.asc())
             .first())
 
     if not conv:
-        # 没有 pending，创建一个闲聊对话
+        # 没有 pending，续用最近的 active 对话（保留历史）
+        conv = (db.query(Conversation)
+                .filter_by(user_id=user_id, status="active")
+                .order_by(Conversation.created_at.desc())
+                .first())
+
+    if not conv:
+        # 真的没有任何对话，才创建新的
         conv = Conversation(user_id=user_id, trigger="chat", status="active")
         db.add(conv)
         db.commit()
