@@ -12,6 +12,7 @@ export default function CoachPage() {
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [model, setModel] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState(null);
   const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
 
@@ -21,6 +22,7 @@ export default function CoachPage() {
       setMessages(data.messages);
       setDone(data.status === 'complete');
       if (data.model) setModel(data.model);
+      if (data.avatar_url) setAvatarUrl(data.avatar_url);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -39,6 +41,7 @@ export default function CoachPage() {
       const res = await api.coachMessage(convId, text);
       setMessages(prev => [...prev, { role: 'coach', content: res.reply }]);
       if (res.model) setModel(res.model);
+      if (res.avatar_url) setAvatarUrl(res.avatar_url);
       if (res.is_complete) setDone(true);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'coach', content: `出错了：${e.message}` }]);
@@ -55,6 +58,7 @@ export default function CoachPage() {
       setMessages(data.messages);
       setDone(false);
       if (data.model) setModel(data.model);
+      if (data.avatar_url) setAvatarUrl(data.avatar_url);
     } catch (e) {
       alert('开启新对话失败：' + e.message);
     } finally {
@@ -79,10 +83,10 @@ export default function CoachPage() {
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-1">
         {messages.map((m, i) => (
-          <MessageBubble key={i} role={m.role} content={m.content} />
+          <MessageBubble key={i} role={m.role} content={m.content} avatarUrl={m.role === 'coach' ? avatarUrl : null} />
         ))}
         {sending && (
-          <MessageBubble role="coach" content="..." typing />
+          <MessageBubble role="coach" content="..." typing avatarUrl={avatarUrl} />
         )}
         <div ref={bottomRef} />
       </div>
@@ -122,16 +126,20 @@ export default function CoachPage() {
   );
 }
 
-function MessageBubble({ role, content, typing }) {
+function MessageBubble({ role, content, typing, avatarUrl }) {
   const isCoach = role === 'coach';
   return (
     <div className={`flex gap-3 ${isCoach ? '' : 'flex-row-reverse'}`}>
       {/* 头像 */}
-      <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${
-        isCoach ? 'bg-orange-500 text-white' : 'bg-gray-700 text-gray-300'
-      }`}>
-        {isCoach ? '🤖' : '我'}
-      </div>
+      {isCoach && avatarUrl ? (
+        <img src={avatarUrl} alt="coach" className="w-8 h-8 rounded-full flex-shrink-0 object-cover" />
+      ) : (
+        <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${
+          isCoach ? 'bg-orange-500 text-white' : 'bg-gray-700 text-gray-300'
+        }`}>
+          {isCoach ? '🤖' : '我'}
+        </div>
+      )}
       {/* 气泡 */}
       <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
         isCoach

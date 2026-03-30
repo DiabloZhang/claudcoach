@@ -40,6 +40,7 @@ def run_migrations():
                 "ALTER TABLE activities ADD COLUMN IF NOT EXISTS exclude_reason VARCHAR",
                 "ALTER TABLE activities ADD COLUMN IF NOT EXISTS tss_adjusted FLOAT DEFAULT 0.0",
                 "ALTER TABLE activities ADD COLUMN IF NOT EXISTS start_date_local TIMESTAMP",
+                "ALTER TABLE coach_personas ADD COLUMN IF NOT EXISTS avatar_url VARCHAR",
             ]
             for sql in migrations:
                 conn.execute(text(sql))

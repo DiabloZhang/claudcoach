@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import User, Activity, Conversation, Message, CoachPersona
 from ai_coach.coach import (
-    get_or_create_persona, build_first_message, chat, extract_structured_data
+    get_or_create_persona, build_first_message, chat, extract_structured_data,
+    detect_persona_name, find_avatar_url,
 )
 from ai_coach.llm import call_llm, LLMTask, MODELS
 from config import settings
@@ -186,6 +187,7 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
         "trigger": conv.trigger,
         "status": conv.status,
         "model": model_used,
+        "avatar_url": persona.avatar_url,
         "messages": [
             {"role": m.role, "content": m.content, "created_at": m.created_at}
             for m in conv.messages
@@ -224,6 +226,7 @@ def new_conversation(user_id: int, db: Session = Depends(get_db)):
     return {
         "conversation_id": conv.id,
         "model": model_used,
+        "avatar_url": persona.avatar_url,
         "messages": [
             {"role": m.role, "content": m.content, "created_at": m.created_at}
             for m in conv.messages
@@ -263,6 +266,18 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
     # 存教练回复
     db.add(Message(conversation_id=conv.id, role="coach", content=reply))
 
+    # 检测用户是否在设置新身份，若是则搜索头像
+    new_avatar_url = None
+    try:
+        persona_name = detect_persona_name(body.content)
+        if persona_name:
+            url = find_avatar_url(persona_name)
+            if url:
+                persona.avatar_url = url
+                new_avatar_url = url
+    except Exception:
+        pass
+
     if is_done:
         conv.status = "complete"
         # 异步提取结构化数据
@@ -284,6 +299,7 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
         "reply": reply,
         "is_complete": is_done,
         "model": model_used,
+        "avatar_url": new_avatar_url,
     }
 
 

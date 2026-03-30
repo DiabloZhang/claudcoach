@@ -105,6 +105,7 @@ class CoachPersona(Base):
     name = Column(String, default="Coach Alex")
     personality = Column(Text, default="专业、直接但温暖的铁三教练，有15年执教经验")
     style = Column(String, default="专业但不冷漠，会用具体数据支撑建议")
+    avatar_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

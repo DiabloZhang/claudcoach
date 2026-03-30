@@ -1,8 +1,12 @@
 import json
+import logging
+import httpx
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from db.models import User, Activity, Conversation, Message, CoachPersona
 from ai_coach.llm import call_llm, LLMTask
+
+logger = logging.getLogger(__name__)
 
 DONE_SIGNAL = "[DONE]"
 
@@ -108,6 +112,45 @@ def chat(conversation: Conversation, user_message: str,
     reply, model = call_llm(LLMTask.CHAT, system, history)
     is_done = DONE_SIGNAL in reply
     return reply.replace(DONE_SIGNAL, "").strip(), is_done, model
+
+
+def find_avatar_url(name: str) -> str | None:
+    """用 Wikipedia API 搜索人物头像图片 URL"""
+    try:
+        resp = httpx.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query",
+                "titles": name,
+                "prop": "pageimages",
+                "format": "json",
+                "pithumbsize": 300,
+                "redirects": 1,
+            },
+            timeout=5.0,
+        )
+        pages = resp.json().get("query", {}).get("pages", {})
+        for page in pages.values():
+            if "thumbnail" in page:
+                return page["thumbnail"]["source"]
+    except Exception as e:
+        logger.warning(f"Wikipedia avatar search failed for '{name}': {e}")
+    return None
+
+
+def detect_persona_name(user_message: str) -> str | None:
+    """检测用户消息是否在设置新身份，返回人物英文名或 None"""
+    prompt = f"""判断以下消息是否在设置教练的扮演身份或角色扮演对象。如果是，提取要扮演的人物英文全名。
+消息：{user_message}
+只返回 JSON，格式：{{"name": "英文全名"}} 或 {{"name": null}}"""
+    try:
+        text, _ = call_llm(LLMTask.EXTRACT, "", [{"role": "user", "content": prompt}])
+        if "```" in text:
+            text = text.split("```")[1].replace("json", "").strip()
+        data = json.loads(text)
+        return data.get("name")
+    except Exception:
+        return None
 
 
 def extract_structured_data(conversation: Conversation) -> dict:
