@@ -6,7 +6,7 @@ from db.models import User, Activity, Conversation, Message, CoachPersona
 from ai_coach.coach import (
     get_or_create_persona, build_first_message, chat, extract_structured_data
 )
-from ai_coach.llm import call_llm, LLMTask
+from ai_coach.llm import call_llm, LLMTask, MODELS
 from config import settings
 from datetime import date
 import math
@@ -169,6 +169,10 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
         conv.status = "active"
         db.commit()
         db.refresh(conv)
+
+    # 如果没有调用 LLM（对话已有历史消息），返回配置的主力模型名作为提示
+    if model_used is None:
+        model_used = MODELS[settings.llm_provider][LLMTask.CHAT]
 
     return {
         "conversation_id": conv.id,
