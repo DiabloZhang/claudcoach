@@ -12,6 +12,7 @@ export default function CoachPage() {
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [model, setModel] = useState(null);
+  const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -46,10 +47,35 @@ export default function CoachPage() {
     }
   };
 
+  const startNew = async () => {
+    setStarting(true);
+    try {
+      const data = await api.coachNew(USER_ID);
+      setConvId(data.conversation_id);
+      setMessages(data.messages);
+      setDone(false);
+      if (data.model) setModel(data.model);
+    } catch (e) {
+      alert('开启新对话失败：' + e.message);
+    } finally {
+      setStarting(false);
+    }
+  };
+
   if (loading) return <div className="text-gray-500 text-center py-20">教练上线中...</div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] sm:h-[calc(100vh-7rem)] max-w-2xl mx-auto">
+      {/* 顶部栏 */}
+      <div className="flex justify-end py-2">
+        <button
+          onClick={startNew}
+          disabled={starting}
+          className="text-xs text-gray-400 hover:text-gray-200 border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
+        >
+          {starting ? '开启中...' : '+ 新对话'}
+        </button>
+      </div>
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-1">
         {messages.map((m, i) => (

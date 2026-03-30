@@ -193,6 +193,44 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
     }
 
 
+# ── 开启新对话 ────────────────────────────────────────────
+
+@router.post("/new/{user_id}")
+def new_conversation(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    persona = get_or_create_persona(user_id, db)
+    ctl, atl, tsb = _get_fitness_values(user_id, db)
+
+    conv = Conversation(user_id=user_id, trigger="chat", status="active")
+    db.add(conv)
+    db.commit()
+    db.refresh(conv)
+
+    model_used = "fallback"
+    try:
+        first_msg, model_used = build_first_message(user, persona, db, None, ctl, atl, tsb)
+    except Exception as e:
+        first_msg = f"新对话开始！{user.firstname or '运动员'}，最近训练怎么样？"
+        import logging
+        logging.error(f"Coach first message failed: {e}")
+
+    db.add(Message(conversation_id=conv.id, role="coach", content=first_msg))
+    db.commit()
+    db.refresh(conv)
+
+    return {
+        "conversation_id": conv.id,
+        "model": model_used,
+        "messages": [
+            {"role": m.role, "content": m.content, "created_at": m.created_at}
+            for m in conv.messages
+        ],
+    }
+
+
 # ── 发送消息 ──────────────────────────────────────────────
 
 class ChatInput(BaseModel):

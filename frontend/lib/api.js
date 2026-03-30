@@ -33,5 +33,6 @@ export const api = {
   backfill: (userId) => apiFetch(`/analysis/anomalies/${userId}/backfill`),
   calculateTss: (userId) => apiFetch(`/analysis/calculate-tss/${userId}`),
   coachOpen: (userId) => apiFetch(`/coach/open/${userId}`),
+  coachNew: (userId) => apiPost(`/coach/new/${userId}`, {}),
   coachMessage: (convId, content) => apiPost(`/coach/message/${convId}`, { content }),
 };
