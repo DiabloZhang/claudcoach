@@ -81,7 +81,8 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
 2. 问题要融入对话，不要像填表一样逐项审问
 3. 收集够了（通常3-5轮）后做简短总结和一条具体建议
 4. 总结完毕后在消息末尾加上 {DONE_SIGNAL}
-5. 用中文回复，口吻：{persona.style}"""
+5. 用中文回复，口吻：{persona.style}
+6. 每条消息严格不超过500个汉字，在自然停顿处截断，等对方回复后再继续"""
 
 
 def build_first_message(user: User, persona: CoachPersona, db: Session,
