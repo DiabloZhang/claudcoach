@@ -3,7 +3,7 @@ import logging
 import httpx
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from db.models import User, Activity, Conversation, Message, CoachPersona
+from db.models import User, Activity, Conversation, CoachPersona
 from ai_coach.llm import call_llm, LLMTask
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
     week_ago = datetime.utcnow() - timedelta(days=7)
     recent = (db.query(Activity)
               .filter(Activity.user_id == user.id, Activity.start_date >= week_ago,
-                      Activity.is_excluded == False)
+                      Activity.is_excluded.is_(False))
               .order_by(Activity.start_date.desc()).limit(10).all())
     recent_str = "\n".join(f"- {_format_activity(a)}" for a in recent) or "- 近7天暂无训练"
 
