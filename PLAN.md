@@ -13,9 +13,9 @@
 
 **协作规范**：
 - 各自在长期 feature 分支开发，PR 合入 main，CI 通过后 merge
-- `gzl-coach`：DiabloZhang 的主战场，每 0.5-2 天 PR → main
-- `dev/saas`：whz 的主战场
-- PR merge 后分支自动删除（GitHub 开启 Delete branch after merge）
+- `gzl-coach`：DiabloZhang 的主战场，个人节奏约每 0.5-2 天 PR 一次
+- `dev/saas`：whz 的主战场，节奏自定
+- PR merge 后删除已合入的分支，保持 repo 整洁
 - 命名规范：`feature/xxx`（新功能）、`fix/xxx`（bug）、`docs/xxx`（文档）
 
 ---
