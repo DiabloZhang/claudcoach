@@ -4,12 +4,28 @@
 
 ---
 
+## 团队
+
+| 成员 | GitHub | 负责方向 |
+|------|--------|----------|
+| DiabloZhang | @DiabloZhang | AI Coach Agent（Phase 3+）|
+| whz | @whz | SaaS 化、多平台数据接入（Garmin / Wahoo 等）|
+
+**协作规范**：
+- 各自在长期 feature 分支开发，PR 合入 main，CI 通过后 merge
+- `gzl-coach`：DiabloZhang 的主战场，每 0.5-2 天 PR → main
+- `dev/saas`：whz 的主战场
+- PR merge 后分支自动删除（GitHub 开启 Delete branch after merge）
+- 命名规范：`feature/xxx`（新功能）、`fix/xxx`（bug）、`docs/xxx`（文档）
+
+---
+
 ## 项目目标
 
-1. **数据层**：从 Strava 获取原始训练数据（游泳 / 骑行 / 跑步）
+1. **数据层**：从 Strava / Garmin / Wahoo 等平台获取原始训练数据
 2. **分析层**：专业铁三训练指标计算与可视化
 3. **AI教练层**：基于训练数据的主动指导与计划制定
-4. **开源友好**：任何人 clone 后能快速跑起来
+4. **SaaS化**：多用户账号体系，任何人注册即用
 
 ---
 
@@ -313,12 +329,25 @@ claudcoach/
 - [ ] 周训练计划生成
 - [ ] 每日计划执行跟踪
 
-### Phase 4 — 语音深化 + 开源打磨
+### Phase 4 — 语音深化
 - [ ] 声音克隆（上传录音生成专属音色，模仿运动明星）
 - [ ] 完整 README + 使用文档
 - [ ] 多语言支持（中 / 英）
-- [ ] GitHub Actions CI
-- [ ] SaaS 模式改造（Vercel + Supabase + 多用户账号）
+
+---
+
+### Phase W — whz 负责线（并行推进）
+
+#### W1 — SaaS 化
+- [ ] 多用户账号体系（注册 / 登录 / JWT）
+- [ ] 用户数据隔离
+- [ ] 订阅 / 付费模块（nice-to-have）
+
+#### W2 — 多平台数据接入
+- [ ] Garmin Connect 数据同步
+- [ ] Wahoo / Polar / Suunto 接入
+- [ ] 统一数据格式层（屏蔽各平台差异，后端统一 Activity 模型）
+- [ ] Webhook 实时推送（替代现有轮询）
 
 ---
 
