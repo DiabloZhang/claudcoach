@@ -1,6 +1,6 @@
 import httpx
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlalchemy.orm import Session
 from db.models import User, Activity, Stream, SyncLog
 from strava.client import STRAVA_API_BASE, refresh_access_token, is_token_expired

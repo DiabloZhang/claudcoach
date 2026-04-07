@@ -2,15 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from db.database import get_db
-from db.models import User, Activity, Conversation, Message, CoachPersona
+from db.models import User, Activity, Conversation, Message
 from ai_coach.coach import (
     get_or_create_persona, build_first_message, chat, extract_structured_data,
     detect_persona_name, find_avatar_url,
 )
-from ai_coach.llm import call_llm, LLMTask, MODELS
+from ai_coach.llm import LLMTask, MODELS
 from config import settings
 from datetime import date
-import math
 import traceback
 
 router = APIRouter(prefix="/coach", tags=["coach"])

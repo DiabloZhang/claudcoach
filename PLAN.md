@@ -1,6 +1,6 @@
 # TriCoach — AI-Powered Triathlon Training Assistant
-> 规划文档，随对话持续更新
-> 最后更新：2026-03-20
+> 规划文档，随项目迭代持续更新
+> 最后更新：2026-04-04
 
 ---
 
@@ -37,8 +37,8 @@
 | 数据库 | SQLite（默认）/ PostgreSQL | 低门槛，无需额外安装 |
 | 分析库 | pandas, numpy, fitparse | 训练数据处理 |
 | 前端 | Next.js (JS) + Tailwind + Recharts | 生态丰富，开源社区接受度高 |
-| AI | Claude API (claude-sonnet-4-6) | 推理能力强，适合教练角色 |
-| 部署 | Docker Compose | 一命令起服务 |
+| AI | Claude API / Gemini | 双 provider，自动降级兜底 |
+| 部署 | Docker Compose / Railway | 本地一键起，云端自动部署 |
 
 ---
 
@@ -123,7 +123,7 @@ claudcoach/
 
 ## 开发路线图
 
-### Phase 1 — 本地 MVP（进行中，Step 5 待开始）
+### Phase 1 — 本地 MVP ✅
 
 #### Step 1 — 后端骨架 `复杂度：低` ✅
 - [x] FastAPI 项目初始化
@@ -203,9 +203,9 @@ claudcoach/
 
 ---
 
-### Phase 2 — 云端 + 分析深化
+### Phase 2 — 云端 + 分析深化 + 协作模式
 
-#### Phase 2a — Railway 云端部署 ✅（2026-03-26 完成）
+#### Phase 2a — Railway 云端部署 ✅
 - [x] SQLite → PostgreSQL 迁移（Railway 免费 PG）
 - [x] 后端部署：https://claudcoach-production.up.railway.app
 - [x] 前端部署：https://claudcoachfrontend-production.up.railway.app
@@ -219,8 +219,23 @@ claudcoach/
 - [ ] 功率曲线（Power-Duration Curve）
 - [ ] 手机响应式适配
 
-### Phase 3 — AI 教练
+#### Phase 2c — 协作模式（进行中）
 
+项目从单用户/单开发者模式转向多人协作，需要完成以下基础设施改造：
+
+- [x] **AI 协作者规范**：将根目录 `CLAUDE.md` 改为项目共识版，去掉个人习惯
+- [x] **Git 工作流规范**：所有改动通过 feature branch → PR → merge 进入 `main`，禁止直接 push `main`
+- [x] **Git Remote 整理**：核心协作者使用 upstream 仓库直接开发，fork 作为备份或弃用
+- [ ] **多用户鉴权**：当前前端硬编码 `USER_ID = 1`，后端无认证。必须引入 JWT / Session 鉴权，支持：
+  - 多人各自登录 Strava 并独立查看数据
+  - 区分「当前登录用户」与「访问权限」
+  - 为后续 SaaS 化打基础
+- [ ] **环境隔离**：区分本地开发配置与云端生产配置（数据库 URL、CORS、API endpoint）
+- [ ] **CI 规范化**：GitHub Actions 覆盖后端 lint + pytest、前端 build，并在 PR 中强制通过
+
+---
+
+### Phase 3 — AI 教练
 > 教练完整能力清单见 [docs/coach-capabilities.md](docs/coach-capabilities.md)
 
 #### 用户 2026 赛季
@@ -264,7 +279,7 @@ claudcoach/
 
 #### 睡眠时间与定时触发
 - `User.sleep_time`：用户本地睡眠时间，默认 22:00，**教练在对话中问，不填表**
-- `User.timezone`：用户时区，正式存库（当前用户 Asia/Shanghai）
+- `User.timezone`：用户时区，正式存库（默认 Asia/Shanghai）
 - 每日日志一个字段：`content`，教练统一写。用户在对话中说了什么，教练以"学员说，xxx"嵌入。
   - 示例："骑行90km，TSS=92。学员说感觉比数据显示的更累，睡眠不足。建议明日轻松恢复。"
 - 每日日志：每天 sleep_time 写（同时作为入睡提醒）
@@ -329,7 +344,9 @@ claudcoach/
 - [ ] 周训练计划生成
 - [ ] 每日计划执行跟踪
 
-### Phase 4 — 语音深化
+---
+
+### Phase 4 — 语音深化 + 开源打磨
 - [ ] 声音克隆（上传录音生成专属音色，模仿运动明星）
 - [ ] 完整 README + 使用文档
 - [ ] 多语言支持（中 / 英）
@@ -388,15 +405,3 @@ claudcoach/
 - [ ] 是否支持 Garmin / Wahoo 等其他数据源
 - [ ] AI 教练的个性化程度（通用 vs 针对特定赛事距离）
 - [ ] 是否需要用户账号系统（多用户 vs 单用户本地工具）
-
----
-
-## 对话记录摘要
-
-- 2026-03-20：初步规划，确定核心目标和技术方向
-- 2026-03-20：前端确定用 Next.js (JS)，项目目录建立在 claudecode/claudcoach
-- 2026-03-20：确定部署策略——短期本地轮询、中期VPS+Webhook、长期视情况SaaS
-- 2026-03-20：细化 Phase 1 为 Step 1-8，逐步推进，当前在 Step 1 之前（准备阶段）
-- 2026-03-20：Step 1-4 全部完成，数据库有 69 条 2026 年以来的真实训练数据，明天继续 Step 5
-- 2026-03-23：Step 5 完成，TSS/CTL/ATL/TSB/三项平衡全部实现。用户阈值：FTP=260W，跑步配速=250s/km(4:10)，CSS=120s/100m(2:00)。当前体能：CTL=91.4，ATL=120.8，TSB=-29.4
-- 2026-03-25：Phase 1 MVP 全部完成（Step 1-8）。讨论新想法并更新 Phase 3：教练心情值系统、主动对话机制、各类训练记录、语音对话（延后）、开发日记（docs/devlog/）

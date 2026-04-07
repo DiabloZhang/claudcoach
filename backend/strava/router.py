@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from db.database import get_db
 from db.models import User, SyncLog
-from strava.client import get_authorization_url, exchange_code, get_athlete
+from strava.client import get_authorization_url, exchange_code
 from strava.sync import sync_user_activities
 from config import settings
 
@@ -82,17 +82,17 @@ def get_sync_logs(user_id: int, limit: int = 20, db: Session = Depends(get_db)):
     )
     return [
         {
-            "id": l.id,
-            "started_at": l.started_at,
-            "sync_from": l.sync_from,
-            "activities_synced": l.activities_synced,
-            "activities_skipped": l.activities_skipped,
-            "strava_api_calls": l.strava_api_calls,
-            "duration_seconds": l.duration_seconds,
-            "status": l.status,
-            "error_message": l.error_message,
+            "id": log.id,
+            "started_at": log.started_at,
+            "sync_from": log.sync_from,
+            "activities_synced": log.activities_synced,
+            "activities_skipped": log.activities_skipped,
+            "strava_api_calls": log.strava_api_calls,
+            "duration_seconds": log.duration_seconds,
+            "status": log.status,
+            "error_message": log.error_message,
         }
-        for l in logs
+        for log in logs
     ]
 
 
