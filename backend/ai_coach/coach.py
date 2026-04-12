@@ -40,7 +40,7 @@ def _format_activity(a: Activity) -> str:
 
 def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
                           activity: Activity = None, ctl=None, atl=None, tsb=None) -> str:
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.now(datetime.timezone.utc) - timedelta(days=7)
     recent = (db.query(Activity)
               .filter(Activity.user_id == user.id, Activity.start_date >= week_ago,
                       Activity.is_excluded.is_(False))

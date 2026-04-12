@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Float, DateTime, Text, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, Integer, BigInteger, String, Float, DateTime, Text, ForeignKey, JSON, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from db.database import Base
@@ -8,10 +8,19 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-    strava_athlete_id = Column(Integer, unique=True, nullable=False)
-    access_token = Column(String, nullable=False)
-    refresh_token = Column(String, nullable=False)
-    token_expires_at = Column(Integer, nullable=False)  # unix timestamp
+
+    # 账户登录信息
+    email = Column(String, unique=True, nullable=True, index=True)
+    password_hash = Column(String, nullable=True)
+    nickname = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    auth_provider = Column(String, default="password")  # password | strava | both
+
+    # Strava OAuth 信息（保留在 User 表保证向后兼容，也作为主要数据源）
+    strava_athlete_id = Column(Integer, unique=True, nullable=True)
+    access_token = Column(String, nullable=True)
+    refresh_token = Column(String, nullable=True)
+    token_expires_at = Column(Integer, nullable=True)  # unix timestamp
 
     # 个人信息
     firstname = Column(String)
@@ -24,18 +33,68 @@ class User(Base):
     css = Column(Float)        # 临界游泳速度（游泳，秒/100m）
     run_threshold_pace = Column(Float)  # 跑步阈值配速（秒/km）
 
+    # AI 教练相关
+    timezone = Column(String, default="Asia/Shanghai")
+    sleep_time = Column(String, default="22:00")
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     activities = relationship("Activity", back_populates="user")
+    data_sources = relationship("UserDataSource", back_populates="user", cascade="all, delete-orphan")
+    states = relationship("UserState", back_populates="user", cascade="all, delete-orphan")
+
+
+class UserDataSource(Base):
+    """用户上游数据源认证信息（支持多数据源）"""
+    __tablename__ = "user_data_sources"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    provider = Column(String, nullable=False)  # strava, garmin, etc.
+
+    # 应用级凭证（用户可配置自己的 Strava App）
+    client_id = Column(String, nullable=True)
+    client_secret_encrypted = Column(String, nullable=True)  # Fernet 加密
+
+    # 用户级凭证
+    access_token_encrypted = Column(String, nullable=True)   # Fernet 加密
+    refresh_token_encrypted = Column(String, nullable=True)  # Fernet 加密
+    token_expires_at = Column(Integer, nullable=True)        # unix timestamp
+    athlete_id = Column(String, nullable=True)
+
+    # 额外配置
+    settings = Column(JSON, default=dict)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="data_sources")
+
+
+class UserState(Base):
+    """用户状态信息（LLM 上下文、教练记忆等大文本）"""
+    __tablename__ = "user_states"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    state_key = Column(String, nullable=False, index=True)   # 如 llm_context, coach_memory
+    state_value = Column(Text, nullable=False)               # 大文本 / JSON 字符串
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="states")
 
 
 class Activity(Base):
     __tablename__ = "activities"
+    __table_args__ = (
+        UniqueConstraint("user_id", "strava_id", name="uix_activity_user_strava"),
+    )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    strava_id = Column(BigInteger, unique=True, nullable=False)
+    strava_id = Column(BigInteger, nullable=False)
 
     # 基础信息
     name = Column(String)

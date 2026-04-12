@@ -2,11 +2,12 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    strava_client_id: str
-    strava_client_secret: str
-    strava_redirect_uri: str = "http://localhost:8000/auth/callback"
+    strava_client_id: str = ""
+    strava_client_secret: str = ""
+    strava_redirect_uri: str = "http://localhost:8000/strava/callback"
 
     anthropic_api_key: str = ""
+    anthropic_base_url: str = ""  # 自定义 Anthropic API 端点
     gemini_api_key: str = ""
     llm_provider: str = "gemini"  # gemini | anthropic
 
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
 
     poll_interval_minutes: int = 60  # 定时轮询间隔，可在 .env 中设置 POLL_INTERVAL_MINUTES=30
+
+    # JWT 配置
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 天
 
     @property
     def sqlalchemy_database_url(self) -> str:

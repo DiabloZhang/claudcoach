@@ -13,3 +13,6 @@ cryptography==43.0.0
 python-jose[cryptography]==3.3.0
 apscheduler==3.10.4
 psycopg2-binary==2.9.10
+passlib==1.7.4
+bcrypt==4.3.0
+email-validator==2.2.0
