@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Annotated
 
 from db.database import get_db
 from db.models import User, UserDataSource, UserState
@@ -104,8 +104,8 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.put("/profile")
 def update_profile(
     body: ProfileUpdateRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     if body.nickname is not None:
         current_user.nickname = body.nickname
@@ -128,8 +128,8 @@ def update_profile(
 @router.post("/change-password")
 def change_password(
     body: ChangePasswordRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     if current_user.password_hash:
         # 已设置密码：必须提供正确的原密码
@@ -148,8 +148,8 @@ def change_password(
 
 @router.post("/strava/disconnect")
 def strava_disconnect(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     """解除 Strava 绑定。若当前账户未设置密码，则禁止解绑，避免用户被锁在外面。"""
     if not current_user.password_hash:
@@ -172,8 +172,8 @@ def strava_disconnect(
 
 @router.get("/data-sources")
 def list_data_sources(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     sources = db.query(UserDataSource).filter(UserDataSource.user_id == current_user.id).all()
     return [
@@ -193,8 +193,8 @@ def list_data_sources(
 @router.post("/data-sources")
 def create_data_source(
     body: DataSourceRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     existing = db.query(UserDataSource).filter(
         UserDataSource.user_id == current_user.id,
@@ -218,8 +218,8 @@ def create_data_source(
 @router.delete("/data-sources/{source_id}")
 def delete_data_source(
     source_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     source = db.query(UserDataSource).filter(
         UserDataSource.id == source_id,
@@ -237,8 +237,8 @@ def delete_data_source(
 @router.get("/state/{key}")
 def get_state(
     key: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     state = db.query(UserState).filter(
         UserState.user_id == current_user.id,
@@ -253,8 +253,8 @@ def get_state(
 def set_state(
     key: str,
     body: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     state = db.query(UserState).filter(
         UserState.user_id == current_user.id,
@@ -273,8 +273,8 @@ def set_state(
 @router.delete("/state/{key}")
 def delete_state(
     key: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     state = db.query(UserState).filter(
         UserState.user_id == current_user.id,

@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, BigInteger, String, Float, DateTime, Text, ForeignKey, JSON, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from db.database import Base
 
 
@@ -37,8 +37,8 @@ class User(Base):
     timezone = Column(String, default="Asia/Shanghai")
     sleep_time = Column(String, default="22:00")
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     activities = relationship("Activity", back_populates="user")
     data_sources = relationship("UserDataSource", back_populates="user", cascade="all, delete-orphan")
@@ -66,8 +66,8 @@ class UserDataSource(Base):
     # 额外配置
     settings = Column(JSON, default=dict)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="data_sources")
 
@@ -81,7 +81,7 @@ class UserState(Base):
     state_key = Column(String, nullable=False, index=True)   # 如 llm_context, coach_memory
     state_value = Column(Text, nullable=False)               # 大文本 / JSON 字符串
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="states")
 
@@ -135,7 +135,7 @@ class Activity(Base):
     exclude_reason = Column(String)                # 排除原因（自动检测 or 手动）
     tss_adjusted = Column(Float, default=0.0)      # 异常数据的修正 TSS（默认0，未来可人工修正为估算值）
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="activities")
     streams = relationship("Stream", back_populates="activity", cascade="all, delete-orphan")
@@ -165,8 +165,8 @@ class CoachPersona(Base):
     personality = Column(Text, default="专业、直接但温暖的铁三教练，有15年执教经验")
     style = Column(String, default="专业但不冷漠，会用具体数据支撑建议")
     avatar_url = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class Conversation(Base):
@@ -183,8 +183,8 @@ class Conversation(Base):
     body_status = Column(String)     # normal / fatigue / pain / sick
     life_stress = Column(String)     # none / mild / significant
     notes = Column(Text)             # 对话摘要
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     messages = relationship("Message", back_populates="conversation", order_by="Message.id")
 
@@ -196,7 +196,7 @@ class Message(Base):
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
     role = Column(String, nullable=False)   # "coach" / "user"
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     conversation = relationship("Conversation", back_populates="messages")
 
