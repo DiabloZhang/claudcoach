@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from './AuthProvider';
 
 const links = [
   { href: '/', label: 'Dashboard', icon: '📊' },
@@ -11,30 +12,59 @@ const links = [
 
 export default function Nav() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+
   return (
     <>
       {/* 桌面顶部导航 */}
       <nav className="hidden sm:block border-b border-gray-800 bg-gray-900">
-        <div className="max-w-6xl mx-auto px-4 flex items-center gap-8 h-14">
-          <span className="font-bold text-orange-400 text-lg">TriCoach</span>
-          {links.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className={`text-sm font-medium transition-colors ${
-                pathname === href ? 'text-white' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
+        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-14">
+          <div className="flex items-center gap-8">
+            <span className="font-bold text-orange-400 text-lg">TriCoach</span>
+            {links.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className={`text-sm font-medium transition-colors ${
+                  pathname === href ? 'text-white' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+          <div className="flex items-center gap-4">
+            {user ? (
+              <>
+                <Link href="/settings" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">
+                  {user.nickname || user.name || '设置'}
+                </Link>
+                <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+                  退出
+                </button>
+              </>
+            ) : (
+              <Link href="/login" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">
+                登录
+              </Link>
+            )}
+          </div>
         </div>
       </nav>
 
       {/* 手机顶部 logo 栏 */}
       <nav className="sm:hidden border-b border-gray-800 bg-gray-900">
-        <div className="px-4 flex items-center h-12">
+        <div className="px-4 flex items-center justify-between h-12">
           <span className="font-bold text-orange-400 text-lg">TriCoach</span>
+          {user ? (
+            <Link href="/settings" className="text-sm text-gray-400">
+              {user.nickname || user.name || '设置'}
+            </Link>
+          ) : (
+            <Link href="/login" className="text-sm text-orange-400">
+              登录
+            </Link>
+          )}
         </div>
       </nav>
 

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import User, Activity, Conversation, Message
+from auth.dependencies import get_current_user
 from ai_coach.coach import (
     get_or_create_persona, build_first_message, chat, extract_structured_data,
     detect_persona_name, find_avatar_url,
@@ -76,9 +77,9 @@ def _get_fitness_values(user_id: int, db: Session):
 
 # ── 教练人设 ──────────────────────────────────────────────
 
-@router.get("/persona/{user_id}")
-def get_persona(user_id: int, db: Session = Depends(get_db)):
-    persona = get_or_create_persona(user_id, db)
+@router.get("/persona")
+def get_persona(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    persona = get_or_create_persona(current_user.id, db)
     return {
         "name": persona.name,
         "personality": persona.personality,
@@ -92,9 +93,9 @@ class PersonaUpdate(BaseModel):
     style: str = None
 
 
-@router.put("/persona/{user_id}")
-def update_persona(user_id: int, body: PersonaUpdate, db: Session = Depends(get_db)):
-    persona = get_or_create_persona(user_id, db)
+@router.put("/persona")
+def update_persona(body: PersonaUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    persona = get_or_create_persona(current_user.id, db)
     if body.name is not None:
         persona.name = body.name
     if body.personality is not None:
@@ -107,10 +108,10 @@ def update_persona(user_id: int, body: PersonaUpdate, db: Session = Depends(get_
 
 # ── 对话列表 ──────────────────────────────────────────────
 
-@router.get("/conversations/{user_id}")
-def list_conversations(user_id: int, db: Session = Depends(get_db)):
+@router.get("/conversations")
+def list_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     convs = (db.query(Conversation)
-             .filter_by(user_id=user_id)
+             .filter_by(user_id=current_user.id)
              .order_by(Conversation.created_at.desc())
              .limit(20).all())
     return [
@@ -127,32 +128,28 @@ def list_conversations(user_id: int, db: Session = Depends(get_db)):
 
 # ── 打开 Coach 页面：返回待处理对话（或新建空对话）──────────
 
-@router.get("/open/{user_id}")
-def open_coach(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter_by(id=user_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
-
-    persona = get_or_create_persona(user_id, db)
-    ctl, atl, tsb = _get_fitness_values(user_id, db)
+@router.get("/open")
+def open_coach(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    persona = get_or_create_persona(current_user.id, db)
+    ctl, atl, tsb = _get_fitness_values(current_user.id, db)
     model_used = None
 
     # 优先找最老的 pending 对话
     conv = (db.query(Conversation)
-            .filter_by(user_id=user_id, status="pending")
+            .filter_by(user_id=current_user.id, status="pending")
             .order_by(Conversation.created_at.asc())
             .first())
 
     if not conv:
         # 没有 pending，续用最近的 active 对话（保留历史）
         conv = (db.query(Conversation)
-                .filter_by(user_id=user_id, status="active")
+                .filter_by(user_id=current_user.id, status="active")
                 .order_by(Conversation.created_at.desc())
                 .first())
 
     if not conv:
         # 真的没有任何对话，才创建新的
-        conv = Conversation(user_id=user_id, trigger="chat", status="active")
+        conv = Conversation(user_id=current_user.id, trigger="chat", status="active")
         db.add(conv)
         db.commit()
         db.refresh(conv)
@@ -165,9 +162,9 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
 
         model_used = "fallback"
         try:
-            first_msg, model_used = build_first_message(user, persona, db, activity, ctl, atl, tsb)
+            first_msg, model_used = build_first_message(current_user, persona, db, activity, ctl, atl, tsb)
         except Exception as e:
-            first_msg = f"你好，{user.firstname or '运动员'}！我是你的教练 {persona.name}，跟我聊聊最近的训练吧。"
+            first_msg = f"你好，{current_user.firstname or '运动员'}！我是你的教练 {persona.name}，跟我聊聊最近的训练吧。"
             import logging
             logging.error(f"Coach first message failed: {e}")
 
@@ -196,25 +193,21 @@ def open_coach(user_id: int, db: Session = Depends(get_db)):
 
 # ── 开启新对话 ────────────────────────────────────────────
 
-@router.post("/new/{user_id}")
-def new_conversation(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter_by(id=user_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+@router.post("/new")
+def new_conversation(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    persona = get_or_create_persona(current_user.id, db)
+    ctl, atl, tsb = _get_fitness_values(current_user.id, db)
 
-    persona = get_or_create_persona(user_id, db)
-    ctl, atl, tsb = _get_fitness_values(user_id, db)
-
-    conv = Conversation(user_id=user_id, trigger="chat", status="active")
+    conv = Conversation(user_id=current_user.id, trigger="chat", status="active")
     db.add(conv)
     db.commit()
     db.refresh(conv)
 
     model_used = "fallback"
     try:
-        first_msg, model_used = build_first_message(user, persona, db, None, ctl, atl, tsb)
+        first_msg, model_used = build_first_message(current_user, persona, db, None, ctl, atl, tsb)
     except Exception as e:
-        first_msg = f"新对话开始！{user.firstname or '运动员'}，最近训练怎么样？"
+        first_msg = f"新对话开始！{current_user.firstname or '运动员'}，最近训练怎么样？"
         import logging
         logging.error(f"Coach first message failed: {e}")
 
@@ -240,23 +233,24 @@ class ChatInput(BaseModel):
 
 
 @router.post("/message/{conversation_id}")
-def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(get_db)):
+def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     conv = db.query(Conversation).filter_by(id=conversation_id).first()
     if not conv:
         raise HTTPException(404, "Conversation not found")
+    if conv.user_id != current_user.id:
+        raise HTTPException(403, "无权操作此对话")
     if conv.status == "complete":
         raise HTTPException(400, "Conversation already complete")
 
-    user = db.query(User).filter_by(id=conv.user_id).first()
-    persona = get_or_create_persona(conv.user_id, db)
-    ctl, atl, tsb = _get_fitness_values(conv.user_id, db)
+    persona = get_or_create_persona(current_user.id, db)
+    ctl, atl, tsb = _get_fitness_values(current_user.id, db)
 
     # 存用户消息
     db.add(Message(conversation_id=conv.id, role="user", content=body.content))
     db.commit()
 
     try:
-        reply, is_done, model_used = chat(conv, body.content, user, persona, db, ctl, atl, tsb)
+        reply, is_done, model_used = chat(conv, body.content, current_user, persona, db, ctl, atl, tsb)
     except Exception as e:
         import logging
         logging.error(f"Coach chat failed: {e}")

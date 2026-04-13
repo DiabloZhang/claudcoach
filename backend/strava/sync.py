@@ -1,6 +1,6 @@
 import httpx
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from db.models import User, Activity, Stream, SyncLog
 from strava.client import STRAVA_API_BASE, refresh_access_token, is_token_expired
@@ -106,7 +106,7 @@ async def sync_user_activities(user: User, db: Session, since: datetime = None) 
     同步用户活动。since 指定从哪个时间点开始，默认从最新活动时间起。
     返回同步统计（含 Strava API 调用次数）。
     """
-    started_at = datetime.utcnow()
+    started_at = datetime.now(timezone.utc)
     t0 = time.time()
     token = await get_valid_token(user, db)
     api_calls = 0
@@ -136,7 +136,8 @@ async def sync_user_activities(user: User, db: Session, since: datetime = None) 
                 strava_id = raw["id"]
 
                 exists = db.query(Activity).filter(
-                    Activity.strava_id == strava_id
+                    Activity.user_id == user.id,
+                    Activity.strava_id == strava_id,
                 ).first()
                 if exists:
                     skipped += 1

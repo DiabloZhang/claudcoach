@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import User, Activity, Stream
+from auth.dependencies import get_current_user
 from analysis.metrics import (
     calc_tss_for_activity,
     calc_ctl_atl_tsb,
@@ -22,17 +23,16 @@ router = APIRouter(prefix="/analysis", tags=["analysis"])
 # 计算并保存所有活动的 TSS
 # ─────────────────────────────────────────
 
-@router.get("/calculate-tss/{user_id}")
-def calculate_tss(user_id: int, db: Session = Depends(get_db)):
+@router.get("/calculate-tss")
+def calculate_tss(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     为该用户所有活动计算 TSS 并写入数据库。
     需要用户先设置 ftp / lthr / css / run_threshold_pace。
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    activities = db.query(Activity).filter(Activity.user_id == user_id).all()
+    activities = db.query(Activity).filter(Activity.user_id == user.id).all()
 
     updated = 0
     skipped = 0
@@ -61,18 +61,18 @@ def calculate_tss(user_id: int, db: Session = Depends(get_db)):
 # CTL / ATL / TSB 体能曲线
 # ─────────────────────────────────────────
 
-@router.get("/fitness/{user_id}")
-def get_fitness(user_id: int, days: int = 90, db: Session = Depends(get_db)):
+@router.get("/fitness")
+def get_fitness(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    days: int = 90,
+):
     """
     返回最近 N 天的 CTL / ATL / TSB 时序数据（用于前端折线图）。
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
     activities = (
         db.query(Activity)
-        .filter(Activity.user_id == user_id)
+        .filter(Activity.user_id == user.id)
         .all()
     )
 
@@ -95,19 +95,20 @@ def get_fitness(user_id: int, days: int = 90, db: Session = Depends(get_db)):
 # 心率区间分布（单次活动）
 # ─────────────────────────────────────────
 
-@router.get("/hr-zones/{user_id}/{activity_id}")
-def get_hr_zones(user_id: int, activity_id: int, db: Session = Depends(get_db)):
+@router.get("/hr-zones/{activity_id}")
+def get_hr_zones(
+    activity_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     返回指定活动的心率区间分布（需要用户已设置 LTHR）。
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
     if not user.lthr:
         raise HTTPException(status_code=400, detail="请先设置 LTHR（乳酸阈值心率）")
 
     activity = db.query(Activity).filter(
-        Activity.id == activity_id, Activity.user_id == user_id
+        Activity.id == activity_id, Activity.user_id == user.id
     ).first()
     if not activity:
         raise HTTPException(status_code=404, detail="活动不存在")
@@ -131,18 +132,18 @@ def get_hr_zones(user_id: int, activity_id: int, db: Session = Depends(get_db)):
 # 三项训练量平衡
 # ─────────────────────────────────────────
 
-@router.get("/balance/{user_id}")
-def get_balance(user_id: int, days: int = 28, db: Session = Depends(get_db)):
+@router.get("/balance")
+def get_balance(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    days: int = 28,
+):
     """
     统计最近 N 天游泳/骑行/跑步各自的训练量（次数/时长/距离）。
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
     activities = (
         db.query(Activity)
-        .filter(Activity.user_id == user_id)
+        .filter(Activity.user_id == user.id)
         .all()
     )
 
@@ -154,14 +155,14 @@ def get_balance(user_id: int, days: int = 28, db: Session = Depends(get_db)):
 # 用户阈值设置（FTP / LTHR / CSS / 跑步配速）
 # ─────────────────────────────────────────
 
-@router.put("/thresholds/{user_id}")
+@router.put("/thresholds")
 def update_thresholds(
-    user_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
     ftp: float = None,
     lthr: float = None,
     css: float = None,
     run_threshold_pace: float = None,
-    db: Session = Depends(get_db),
 ):
     """
     更新用户的训练阈值参数。
@@ -170,10 +171,6 @@ def update_thresholds(
     - css: 临界游泳速度（秒/100m）
     - run_threshold_pace: 跑步阈值配速（秒/km）
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
     if ftp is not None:
         user.ftp = ftp
     if lthr is not None:
@@ -197,16 +194,15 @@ def update_thresholds(
 # 综合概览（Dashboard 用）
 # ─────────────────────────────────────────
 
-@router.get("/summary/{user_id}")
-def get_summary(user_id: int, db: Session = Depends(get_db)):
+@router.get("/summary")
+def get_summary(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     返回当前体能状态快照：最新 CTL/ATL/TSB + 近28天三项平衡 + 近7天活动数。
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    activities = db.query(Activity).filter(Activity.user_id == user_id).all()
+    activities = db.query(Activity).filter(Activity.user_id == user.id).all()
 
     # 体能状态（异常活动用 tss_adjusted，默认0）
     daily_tss: dict[date, float] = {}
@@ -245,16 +241,15 @@ def get_summary(user_id: int, db: Session = Depends(get_db)):
 # 异常数据检测与管理
 # ─────────────────────────────────────────
 
-@router.get("/anomalies/{user_id}")
-def get_anomalies(user_id: int, db: Session = Depends(get_db)):
+@router.get("/anomalies")
+def get_anomalies(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     扫描该用户所有活动，返回检测到的异常列表。
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    activities = db.query(Activity).filter(Activity.user_id == user_id).all()
+    activities = db.query(Activity).filter(Activity.user_id == user.id).all()
     flagged = scan_all_anomalies(activities)
 
     return {
@@ -264,13 +259,18 @@ def get_anomalies(user_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/anomalies/{user_id}/{activity_id}/exclude")
-def exclude_activity(user_id: int, activity_id: int, reason: str = "手动排除", db: Session = Depends(get_db)):
+@router.post("/anomalies/{activity_id}/exclude")
+def exclude_activity(
+    activity_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    reason: str = "手动排除",
+):
     """
     将指定活动标记为排除（不参与 TSS/CTL/ATL 计算）。
     """
     activity = db.query(Activity).filter(
-        Activity.id == activity_id, Activity.user_id == user_id
+        Activity.id == activity_id, Activity.user_id == user.id
     ).first()
     if not activity:
         raise HTTPException(status_code=404, detail="活动不存在")
@@ -284,13 +284,17 @@ def exclude_activity(user_id: int, activity_id: int, reason: str = "手动排除
     return {"message": f"活动 {activity_id} 已排除", "reason": reason}
 
 
-@router.post("/anomalies/{user_id}/{activity_id}/include")
-def include_activity(user_id: int, activity_id: int, db: Session = Depends(get_db)):
+@router.post("/anomalies/{activity_id}/include")
+def include_activity(
+    activity_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     恢复被排除的活动（重新加入计算）。
     """
     activity = db.query(Activity).filter(
-        Activity.id == activity_id, Activity.user_id == user_id
+        Activity.id == activity_id, Activity.user_id == user.id
     ).first()
     if not activity:
         raise HTTPException(status_code=404, detail="活动不存在")
@@ -302,13 +306,16 @@ def include_activity(user_id: int, activity_id: int, db: Session = Depends(get_d
     return {"message": f"活动 {activity_id} 已恢复，请重新运行 calculate-tss 更新数据"}
 
 
-@router.get("/anomalies/{user_id}/backfill")
-def backfill_anomalies(user_id: int, db: Session = Depends(get_db)):
+@router.get("/anomalies/backfill")
+def backfill_anomalies(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     补扫历史活动：检测异常并排除，已排除的补填 tss_adjusted=0。
     新部署后运行一次即可。
     """
-    activities = db.query(Activity).filter(Activity.user_id == user_id).all()
+    activities = db.query(Activity).filter(Activity.user_id == user.id).all()
     newly_excluded = []
     patched = 0
 
@@ -337,16 +344,15 @@ def backfill_anomalies(user_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/anomalies/{user_id}/auto-exclude")
-def auto_exclude_anomalies(user_id: int, db: Session = Depends(get_db)):
+@router.post("/anomalies/auto-exclude")
+def auto_exclude_anomalies(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     自动检测并排除所有异常活动（TSS 置空，等待重新计算）。
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    activities = db.query(Activity).filter(Activity.user_id == user_id).all()
+    activities = db.query(Activity).filter(Activity.user_id == user.id).all()
     excluded = []
 
     for a in activities:

@@ -2,24 +2,43 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
+from typing import Optional
+
+from config import settings
 from db.database import get_db
-from db.models import User, SyncLog
+from db.models import User, SyncLog, Activity
+from auth.dependencies import get_current_user, get_current_user_optional
+from auth.security import create_access_token
 from strava.client import get_authorization_url, exchange_code
 from strava.sync import sync_user_activities
-from config import settings
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/strava", tags=["strava"])
 
 
 @router.get("/login")
-def login():
-    """跳转到 Strava 授权页"""
-    return RedirectResponse(get_authorization_url())
+def login(state: str = None):
+    """
+    跳转到 Strava 授权页。
+    ⚠️ 安全注意：state 参数目前复用传递 JWT 以识别当前用户（绑定模式）。
+    JWT 会经过 Strava 服务器（出现在其日志中），存在泄露风险。
+    TODO: 后续应改用随机 nonce + 服务端存储关联，避免 JWT 外泄。
+    """
+    return RedirectResponse(get_authorization_url(state=state))
 
 
 @router.get("/callback")
-async def callback(code: str, db: Session = Depends(get_db)):
-    """Strava 授权回调，换取 token 并保存用户"""
+async def callback(
+    code: str,
+    state: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Strava 授权回调，换取 token 并保存/更新用户。
+    - 如果用户已登录（state 含 JWT），则绑定到当前账户
+    - 否则尝试用 Strava 登录（已有账户则更新 token，否则创建新账户）
+    """
+    from auth.security import decode_access_token
+
     try:
         token_data = await exchange_code(code)
     except Exception:
@@ -27,16 +46,53 @@ async def callback(code: str, db: Session = Depends(get_db)):
 
     athlete = token_data.get("athlete", {})
     strava_id = athlete.get("id")
-
     if not strava_id:
         raise HTTPException(status_code=400, detail="无法获取用户信息")
 
-    # 已存在则更新 token，否则新建
+    # 检查是否已登录（绑定模式）
+    current_user = None
+    if state:
+        payload = decode_access_token(state)
+        if payload and payload.get("sub"):
+            current_user = db.query(User).filter(
+                User.id == int(payload["sub"]), User.is_active
+            ).first()
+
+    if current_user:
+        # 绑定到当前账户
+        # 检查该 Strava 账户是否已被其他用户绑定
+        existing_binding = db.query(User).filter(
+            User.strava_athlete_id == strava_id,
+            User.id != current_user.id,
+        ).first()
+        if existing_binding:
+            return RedirectResponse(f"{settings.frontend_url}/settings?strava=error&detail=该Strava账户已被其他用户绑定")
+
+        current_user.strava_athlete_id = strava_id
+        current_user.access_token = token_data["access_token"]
+        current_user.refresh_token = token_data["refresh_token"]
+        current_user.token_expires_at = token_data["expires_at"]
+        current_user.firstname = athlete.get("firstname") or current_user.firstname
+        current_user.lastname = athlete.get("lastname") or current_user.lastname
+        current_user.profile_pic = athlete.get("profile") or current_user.profile_pic
+        if not current_user.email and athlete.get("email"):
+            current_user.email = athlete.get("email")
+        if current_user.auth_provider == "password":
+            current_user.auth_provider = "both"
+        db.commit()
+        return RedirectResponse(f"{settings.frontend_url}/settings?strava=linked")
+
+    # 查找或创建用户（登录模式）
     user = db.query(User).filter(User.strava_athlete_id == strava_id).first()
     if user:
         user.access_token = token_data["access_token"]
         user.refresh_token = token_data["refresh_token"]
         user.token_expires_at = token_data["expires_at"]
+        user.firstname = athlete.get("firstname") or user.firstname
+        user.lastname = athlete.get("lastname") or user.lastname
+        user.profile_pic = athlete.get("profile") or user.profile_pic
+        if not user.email and athlete.get("email"):
+            user.email = athlete.get("email")
     else:
         user = User(
             strava_athlete_id=strava_id,
@@ -46,36 +102,48 @@ async def callback(code: str, db: Session = Depends(get_db)):
             firstname=athlete.get("firstname"),
             lastname=athlete.get("lastname"),
             profile_pic=athlete.get("profile"),
+            email=athlete.get("email"),
+            nickname=athlete.get("firstname") or "Strava用户",
+            auth_provider="strava",
         )
         db.add(user)
 
     db.commit()
     db.refresh(user)
 
-    # 授权完成，跳回前端
-    return RedirectResponse(f"{settings.frontend_url}?auth=success&user_id={user.id}")
+    # 生成 JWT 并跳回前端
+    token = create_access_token({"sub": str(user.id)})
+    return RedirectResponse(f"{settings.frontend_url}?auth=success&token={token}")
 
 
-@router.get("/sync/{user_id}")
-async def sync(user_id: int, background_tasks: BackgroundTasks, since: str = None, db: Session = Depends(get_db)):
+@router.get("/sync")
+async def sync(
+    background_tasks: BackgroundTasks,
+    since: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     触发数据同步（后台执行）。
     since: 可选，格式 YYYY-MM-DD，从指定日期开始同步；不填则从最新活动时间起。
     """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
+    if not current_user.strava_athlete_id:
+        raise HTTPException(status_code=400, detail="请先绑定 Strava 账户")
     since_dt = datetime.strptime(since, "%Y-%m-%d") if since else None
-    background_tasks.add_task(sync_user_activities, user, db, since_dt)
+    background_tasks.add_task(sync_user_activities, current_user, db, since_dt)
     return {"message": "同步已开始", "since": since or "最新活动时间起"}
 
 
-@router.get("/sync-logs/{user_id}")
-def get_sync_logs(user_id: int, limit: int = 20, db: Session = Depends(get_db)):
+@router.get("/sync-logs")
+def get_sync_logs(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """获取同步历史记录"""
     logs = (
         db.query(SyncLog)
-        .filter(SyncLog.user_id == user_id)
+        .filter(SyncLog.user_id == current_user.id)
         .order_by(SyncLog.started_at.desc())
         .limit(limit)
         .all()
@@ -96,13 +164,16 @@ def get_sync_logs(user_id: int, limit: int = 20, db: Session = Depends(get_db)):
     ]
 
 
-@router.get("/activities/{user_id}")
-def get_activities(user_id: int, limit: int = 20, db: Session = Depends(get_db)):
+@router.get("/activities")
+def get_activities(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """获取用户活动列表"""
-    from db.models import Activity
     activities = (
         db.query(Activity)
-        .filter(Activity.user_id == user_id)
+        .filter(Activity.user_id == current_user.id)
         .order_by(Activity.start_date.desc())
         .limit(limit)
         .all()
@@ -127,14 +198,19 @@ def get_activities(user_id: int, limit: int = 20, db: Session = Depends(get_db))
 
 
 @router.get("/status")
-def auth_status(user_id: int, db: Session = Depends(get_db)):
-    """检查用户是否已授权"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
+def auth_status(
+    current_user: User = Depends(get_current_user_optional),
+):
+    """检查当前用户认证状态"""
+    if not current_user:
         return {"authenticated": False}
     return {
         "authenticated": True,
-        "user_id": user.id,
-        "name": f"{user.firstname} {user.lastname}",
-        "profile_pic": user.profile_pic,
+        "user_id": current_user.id,
+        "name": f"{current_user.firstname or ''} {current_user.lastname or ''}".strip() or current_user.nickname,
+        "profile_pic": current_user.profile_pic,
+        "nickname": current_user.nickname,
+        "email": current_user.email,
+        "has_strava": bool(current_user.strava_athlete_id),
+        "auth_provider": current_user.auth_provider,
     }

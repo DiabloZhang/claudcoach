@@ -7,7 +7,7 @@ STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 STRAVA_API_BASE = "https://www.strava.com/api/v3"
 
 
-def get_authorization_url() -> str:
+def get_authorization_url(state: str = None) -> str:
     """生成 Strava OAuth 授权链接"""
     params = {
         "client_id": settings.strava_client_id,
@@ -15,6 +15,8 @@ def get_authorization_url() -> str:
         "response_type": "code",
         "scope": "read,activity:read_all",
     }
+    if state:
+        params["state"] = state
     query = "&".join(f"{k}={v}" for k, v in params.items())
     return f"{STRAVA_AUTH_URL}?{query}"
 
@@ -27,8 +29,9 @@ async def exchange_code(code: str) -> dict:
             "client_secret": settings.strava_client_secret,
             "code": code,
             "grant_type": "authorization_code",
-        })
-        resp.raise_for_status()
+        }, timeout=30)
+        if resp.status_code != 200:
+            raise Exception(f"Strava token exchange failed: {resp.status_code} {resp.text}")
         return resp.json()
 
 

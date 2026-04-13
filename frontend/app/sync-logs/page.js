@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
-
-const USER_ID = 1;
 
 function formatDateTime(iso) {
   if (!iso) return '--';
@@ -15,17 +15,24 @@ function formatDate(iso) {
 }
 
 export default function SyncLogs() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.syncLogs(USER_ID)
+    if (authLoading) return;
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    api.syncLogs()
       .then(setLogs)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [user, authLoading]);
 
-  if (loading) return <div className="text-gray-500 text-center py-20">加载中...</div>;
+  if (authLoading || loading) return <div className="text-gray-500 text-center py-20">加载中...</div>;
   if (!logs.length) return <div className="text-gray-500 text-center py-20">暂无同步记录</div>;
 
   return (
