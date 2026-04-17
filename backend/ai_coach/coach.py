@@ -1,7 +1,7 @@
 import json
 import logging
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from db.models import User, Activity, Conversation, CoachPersona
 from ai_coach.llm import call_llm, LLMTask
@@ -40,7 +40,7 @@ def _format_activity(a: Activity) -> str:
 
 def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
                           activity: Activity = None, ctl=None, atl=None, tsb=None) -> str:
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     recent = (db.query(Activity)
               .filter(Activity.user_id == user.id, Activity.start_date >= week_ago,
                       Activity.is_excluded.is_(False))

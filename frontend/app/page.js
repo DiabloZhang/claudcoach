@@ -1,13 +1,15 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
+import { api, setToken } from '@/lib/api';
 import FitnessChart from '@/components/FitnessChart';
 import BalanceChart from '@/components/BalanceChart';
 import DailyActivities from '@/components/DailyActivities';
 
-const USER_ID = 1;
-
 export default function Dashboard() {
+  const router = useRouter();
+  const { user, loading: authLoading, refreshUser } = useAuth();
   const [summary, setSummary] = useState(null);
   const [fitness, setFitness] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -16,18 +18,44 @@ export default function Dashboard() {
   const [syncMsg, setSyncMsg] = useState('');
   const [syncDate, setSyncDate] = useState('');
   const [chartHeight, setChartHeight] = useState(420);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
 
   const heightOptions = [
     { label: '矮', value: 420 },
     { label: '中', value: 840 },
   ];
 
+  useEffect(() => {
+    // 处理 Strava OAuth 回调带回的 token，立即清除 URL 参数避免 JWT 泄露
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      if (token) {
+        // 用 history.replaceState 避免触发 Next.js RSC 重新获取
+        window.history.replaceState({}, '', '/');
+        setToken(token);
+        refreshUser();
+        return;
+      }
+    }
+    if (authLoading) return;
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    // Strava 登录用户若未设置密码，弹出一次性引导（仅在未显示时触发）
+    if (!user.has_password && !showPasswordPrompt) {
+      setShowPasswordPrompt(true);
+    }
+    loadData();
+  }, [user, authLoading, showPasswordPrompt]);
+
   const loadData = () => {
     setLoading(true);
     Promise.all([
-      api.summary(USER_ID),
-      api.fitness(USER_ID),
-      api.activities(USER_ID, 30),
+      api.summary(),
+      api.fitness(),
+      api.activities(30),
     ]).then(([s, f, a]) => {
       setSummary(s);
       setFitness(f);
@@ -36,20 +64,18 @@ export default function Dashboard() {
     }).catch(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, []);
-
   const runSync = async (since = null) => {
     setSyncing(true);
     setSyncMsg('');
     try {
       if (since) {
-        await api.syncFrom(USER_ID, since);
+        await api.syncFrom(since);
       } else {
-        await api.sync(USER_ID);
+        await api.sync();
       }
       await new Promise(r => setTimeout(r, 5000));
-      await api.backfill(USER_ID);
-      await api.calculateTss(USER_ID);
+      await api.backfill();
+      await api.calculateTss();
       await new Promise(r => setTimeout(r, 1000));
       loadData();
       setSyncMsg('同步完成');
@@ -60,7 +86,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <div className="text-gray-500 text-center py-20">加载中...</div>;
+  if (authLoading || loading) return <div className="text-gray-500 text-center py-20">加载中...</div>;
 
   const { ctl, atl, tsb } = summary?.fitness ?? {};
   const balance = summary?.balance_28d ?? {};
@@ -130,6 +156,34 @@ export default function Dashboard() {
       <Section title="最近训练">
         <DailyActivities activities={activities} />
       </Section>
+
+      {/* 未设置密码引导弹窗 */}
+      {showPasswordPrompt && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-lg font-semibold text-white">安全提示</h3>
+            <p className="text-gray-400 text-sm leading-relaxed">
+              你当前通过 Strava 登录，尚未设置密码。
+              {!user?.email && ' 建议先在「设置」中补充邮箱并设置密码，这样即使 Strava 授权失效也能正常登录。'}
+              {user?.email && ' 建议前往「设置」中设置密码，这样即使 Strava 授权失效也能正常登录。'}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowPasswordPrompt(false); router.push('/settings'); }}
+                className="flex-1 bg-orange-500 hover:bg-orange-400 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
+              >
+                去设置
+              </button>
+              <button
+                onClick={() => setShowPasswordPrompt(false)}
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-2.5 rounded-lg transition-colors text-sm"
+              >
+                稍后再说
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

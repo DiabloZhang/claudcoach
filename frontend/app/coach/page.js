@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 
-const USER_ID = 1;
-
 export default function CoachPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [convId, setConvId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -17,7 +19,12 @@ export default function CoachPage() {
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    api.coachOpen(USER_ID).then(data => {
+    if (authLoading) return;
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    api.coachOpen().then(data => {
       setConvId(data.conversation_id);
       setMessages(data.messages);
       setDone(data.status === 'complete');
@@ -25,7 +32,7 @@ export default function CoachPage() {
       if (data.avatar_url) setAvatarUrl(data.avatar_url);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  }, [user, authLoading]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -53,7 +60,7 @@ export default function CoachPage() {
   const startNew = async () => {
     setStarting(true);
     try {
-      const data = await api.coachNew(USER_ID);
+      const data = await api.coachNew();
       setConvId(data.conversation_id);
       setMessages(data.messages);
       setDone(false);
@@ -66,7 +73,7 @@ export default function CoachPage() {
     }
   };
 
-  if (loading) return <div className="text-gray-500 text-center py-20">教练上线中...</div>;
+  if (authLoading || loading) return <div className="text-gray-500 text-center py-20">教练上线中...</div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] sm:h-[calc(100vh-7rem)] max-w-2xl mx-auto">

@@ -1,38 +1,97 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
-async function apiFetch(path) {
-  const res = await fetch(`${API_URL}${path}`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+function getToken() {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('token');
+  }
+  return null;
 }
 
-async function apiPost(path, body) {
+function setToken(token) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('token', token);
+  }
+}
+
+function removeToken() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('token');
+  }
+}
+
+async function apiFetch(path, options = {}) {
+  const token = getToken();
   const res = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
+  if (res.status === 401) {
+    removeToken();
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
+    throw new Error('登录已过期，请重新登录');
+  }
   if (!res.ok) {
-    let detail = `${res.status}`;
-    try { detail = (await res.json()).detail || detail; } catch {}
-    throw new Error(detail);
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `API error: ${res.status}`);
   }
   return res.json();
 }
 
+async function apiPost(path, body) {
+  return apiFetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function apiPut(path, body) {
+  return apiFetch(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function apiDelete(path) {
+  return apiFetch(path, { method: 'DELETE' });
+}
+
+export const authApi = {
+  login: (email, password) => apiPost('/auth/login', { email, password }),
+  register: (email, password, nickname) => apiPost('/auth/register', { email, password, nickname }),
+  me: () => apiFetch('/auth/me'),
+  updateProfile: (body) => apiPut('/auth/profile', body),
+  changePassword: (oldPassword, newPassword) => apiPost('/auth/change-password', { old_password: oldPassword, new_password: newPassword }),
+  status: () => apiFetch('/strava/status'),
+  disconnectStrava: () => apiPost('/auth/strava/disconnect', {}),
+  getDataSources: () => apiFetch('/auth/data-sources'),
+  createDataSource: (body) => apiPost('/auth/data-sources', body),
+  deleteDataSource: (id) => apiDelete(`/auth/data-sources/${id}`),
+  getState: (key) => apiFetch(`/auth/state/${key}`),
+  setState: (key, value) => apiPost(`/auth/state/${key}`, { value }),
+};
+
 export const api = {
   health: () => apiFetch('/health'),
-  activities: (userId, limit = 20) => apiFetch(`/auth/activities/${userId}?limit=${limit}`),
-  fitness: (userId) => apiFetch(`/analysis/fitness/${userId}`),
-  summary: (userId) => apiFetch(`/analysis/summary/${userId}`),
-  balance: (userId) => apiFetch(`/analysis/balance/${userId}`),
-  hrZones: (userId, activityId) => apiFetch(`/analysis/hr-zones/${userId}/${activityId}`),
-  sync: (userId) => apiFetch(`/auth/sync/${userId}`),
-  syncFrom: (userId, since) => apiFetch(`/auth/sync/${userId}?since=${since}`),
-  syncLogs: (userId) => apiFetch(`/auth/sync-logs/${userId}`),
-  backfill: (userId) => apiFetch(`/analysis/anomalies/${userId}/backfill`),
-  calculateTss: (userId) => apiFetch(`/analysis/calculate-tss/${userId}`),
-  coachOpen: (userId) => apiFetch(`/coach/open/${userId}`),
-  coachNew: (userId) => apiPost(`/coach/new/${userId}`, {}),
+  activities: (limit = 20) => apiFetch(`/strava/activities?limit=${limit}`),
+  fitness: (days = 90) => apiFetch(`/analysis/fitness?days=${days}`),
+  summary: () => apiFetch('/analysis/summary'),
+  balance: (days = 28) => apiFetch(`/analysis/balance?days=${days}`),
+  hrZones: (activityId) => apiFetch(`/analysis/hr-zones/${activityId}`),
+  sync: () => apiFetch('/strava/sync'),
+  syncFrom: (since) => apiFetch(`/strava/sync?since=${since}`),
+  syncLogs: () => apiFetch('/strava/sync-logs'),
+  backfill: () => apiFetch('/analysis/anomalies/backfill'),
+  calculateTss: () => apiFetch('/analysis/calculate-tss'),
+  coachOpen: () => apiFetch('/coach/open'),
+  coachNew: () => apiPost('/coach/new', {}),
   coachMessage: (convId, content) => apiPost(`/coach/message/${convId}`, { content }),
 };
+
+export { getToken, setToken, removeToken };

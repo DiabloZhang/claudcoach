@@ -1,6 +1,7 @@
 import { Geist } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
+import { AuthProvider } from "@/components/AuthProvider";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -13,10 +14,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="zh">
       <body className={`${geist.className} bg-gray-950 text-gray-100 min-h-screen`}>
-        <Nav />
-        <main className="max-w-6xl mx-auto px-4 py-6 pb-24 sm:py-8 sm:pb-8">
-          {children}
-        </main>
+        <AuthProvider>
+          <Nav />
+          <main className="max-w-6xl mx-auto px-4 py-6 pb-24 sm:py-8 sm:pb-8">
+            {children}
+          </main>
+        </AuthProvider>
       </body>
     </html>
   );

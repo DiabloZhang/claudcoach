@@ -6,6 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from config import settings
 from db.database import engine, Base, run_migrations
 import db.models  # noqa: F401 — 注册所有模型，确保建表
+from auth.router import router as auth_router
 from strava.router import router as strava_router
 from analysis.router import router as analysis_router
 from ai_coach.router import router as coach_router
@@ -37,16 +38,17 @@ async def lifespan(app: FastAPI):
     logging.info("定时轮询已停止")
 
 
-app = FastAPI(title="TriCoach API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="TriCoach API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[settings.frontend_url, "http://localhost:3000", "http://127.0.0.1:3000", "http://172.30.240.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(strava_router)
 app.include_router(analysis_router)
 app.include_router(coach_router)
@@ -54,7 +56,7 @@ app.include_router(coach_router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "0.2.0"}
 
 
 @app.post("/poll/trigger")
