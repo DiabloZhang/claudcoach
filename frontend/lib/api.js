@@ -89,6 +89,7 @@ export const api = {
   syncLogs: () => apiFetch('/strava/sync-logs'),
   backfill: () => apiFetch('/analysis/anomalies/backfill'),
   calculateTss: () => apiFetch('/analysis/calculate-tss'),
+  updateThresholds: (body) => apiPut('/analysis/thresholds', body),
   coachOpen: () => apiFetch('/coach/open'),
   coachNew: () => apiPost('/coach/new', {}),
   coachMessage: (convId, content) => apiPost(`/coach/message/${convId}`, { content }),
