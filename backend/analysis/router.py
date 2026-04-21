@@ -4,6 +4,7 @@
 
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import User, Activity, Stream
@@ -155,14 +156,18 @@ def get_balance(
 # 用户阈值设置（FTP / LTHR / CSS / 跑步配速）
 # ─────────────────────────────────────────
 
+class ThresholdsUpdate(BaseModel):
+    ftp: float | None = None
+    lthr: float | None = None
+    css: float | None = None
+    run_threshold_pace: float | None = None
+
+
 @router.put("/thresholds")
 def update_thresholds(
+    payload: ThresholdsUpdate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    ftp: float = None,
-    lthr: float = None,
-    css: float = None,
-    run_threshold_pace: float = None,
 ):
     """
     更新用户的训练阈值参数。
@@ -171,14 +176,14 @@ def update_thresholds(
     - css: 临界游泳速度（秒/100m）
     - run_threshold_pace: 跑步阈值配速（秒/km）
     """
-    if ftp is not None:
-        user.ftp = ftp
-    if lthr is not None:
-        user.lthr = lthr
-    if css is not None:
-        user.css = css
-    if run_threshold_pace is not None:
-        user.run_threshold_pace = run_threshold_pace
+    if payload.ftp is not None:
+        user.ftp = payload.ftp
+    if payload.lthr is not None:
+        user.lthr = payload.lthr
+    if payload.css is not None:
+        user.css = payload.css
+    if payload.run_threshold_pace is not None:
+        user.run_threshold_pace = payload.run_threshold_pace
 
     db.commit()
     return {
