@@ -112,7 +112,7 @@ function ProfileTab({ user, onMsg, onError, onRefresh }) {
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500"
         />
         {!user?.email && (
-          <p className="text-xs text-gray-500 mt-1.5">绑定邮箱后，可用邮箱+密码方式登录。</p>
+          <p className="text-xs text-gray-500 mt-1.5">建议补充邮箱，便于后续账号合并、找回和备用登录方式管理。</p>
         )}
       </div>
       <div>
@@ -187,9 +187,9 @@ function PasswordTab({ onMsg, onError, hasPassword, userEmail }) {
     <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-4">
       {!hasPassword && (
         <div className="text-sm text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-3">
-          你当前使用 Strava 登录，尚未设置密码。
-          {!userEmail && ' 建议先在「个人资料」中补充邮箱，再设置密码，这样以后可以用邮箱+密码登录。'}
-          {userEmail && ' 设置密码后，即可用邮箱+密码登录。'}
+          你当前已可通过 Strava 正常登录。
+          {!userEmail && ' 如需补充备用登录方式，建议先在「个人资料」中填写邮箱，再按需设置密码。'}
+          {userEmail && ' 如需备用登录方式，可按需设置邮箱密码。'}
         </div>
       )}
       {hasPassword && (
@@ -278,15 +278,15 @@ function DataSourceTab({ user, onMsg, onError, onRefresh }) {
         <h3 className="text-gray-200 font-medium mb-3">Strava</h3>
         {user?.has_strava ? (
           <div className="flex items-center justify-between bg-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[#FC4C02] flex items-center justify-center text-white text-xs font-bold">
-                S
-              </div>
-              <div>
-                <div className="text-sm text-gray-200">已绑定 Strava</div>
-                <div className="text-xs text-gray-500">授权类型: {user.auth_provider}</div>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#FC4C02] flex items-center justify-center text-white text-xs font-bold">
+              S
             </div>
+            <div>
+              <div className="text-sm text-gray-200">已绑定 Strava</div>
+              <div className="text-xs text-gray-500">作为登录方式或训练数据源使用</div>
+            </div>
+          </div>
             <button
               onClick={handleDisconnectStrava}
               disabled={loading}

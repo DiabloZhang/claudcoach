@@ -18,7 +18,6 @@ export default function Dashboard() {
   const [syncMsg, setSyncMsg] = useState('');
   const [syncDate, setSyncDate] = useState('');
   const [chartHeight, setChartHeight] = useState(420);
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
 
   const heightOptions = [
     { label: '矮', value: 420 },
@@ -43,12 +42,8 @@ export default function Dashboard() {
       router.push('/login');
       return;
     }
-    // Strava 登录用户若未设置密码，弹出一次性引导（仅在未显示时触发）
-    if (!user.has_password && !showPasswordPrompt) {
-      setShowPasswordPrompt(true);
-    }
     loadData();
-  }, [user, authLoading, showPasswordPrompt]);
+  }, [user, authLoading, refreshUser, router]);
 
   const loadData = () => {
     setLoading(true);
@@ -156,34 +151,6 @@ export default function Dashboard() {
       <Section title="最近训练">
         <DailyActivities activities={activities} />
       </Section>
-
-      {/* 未设置密码引导弹窗 */}
-      {showPasswordPrompt && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 max-w-sm w-full space-y-4">
-            <h3 className="text-lg font-semibold text-white">安全提示</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              你当前通过 Strava 登录，尚未设置密码。
-              {!user?.email && ' 建议先在「设置」中补充邮箱并设置密码，这样即使 Strava 授权失效也能正常登录。'}
-              {user?.email && ' 建议前往「设置」中设置密码，这样即使 Strava 授权失效也能正常登录。'}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowPasswordPrompt(false); router.push('/settings'); }}
-                className="flex-1 bg-orange-500 hover:bg-orange-400 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
-              >
-                去设置
-              </button>
-              <button
-                onClick={() => setShowPasswordPrompt(false)}
-                className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-2.5 rounded-lg transition-colors text-sm"
-              >
-                稍后再说
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
