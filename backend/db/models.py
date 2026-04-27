@@ -244,6 +244,22 @@ class InjuryConversationRef(Base):
     conversation = relationship("Conversation")
 
 
+class ModelCallLog(Base):
+    __tablename__ = "model_call_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=True, index=True)
+    task = Column(String, nullable=False)
+    model = Column(String, nullable=True)
+    request_json = Column(JSON, nullable=True)
+    response_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    conversation = relationship("Conversation")
+
+
 class Stream(Base):
     __tablename__ = "streams"
 

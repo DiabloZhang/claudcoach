@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from db.database import get_db
-from db.models import User, Activity, Conversation, ConversationTopic, Message, UserInjury, UserState
+from db.models import User, Activity, Conversation, ConversationTopic, Message, ModelCallLog, UserInjury, UserState
 from auth.dependencies import get_current_user
 from ai_coach.coach import (
     get_or_create_persona, build_first_message, chat, extract_structured_data,
@@ -12,12 +12,16 @@ from ai_coach.llm import LLMTask, MODELS
 from ai_coach.topics import process_conversation_topics
 from config import settings
 from datetime import date
+import threading
 import traceback
 
 router = APIRouter(prefix="/coach", tags=["coach"])
 
 MODEL_PROVIDER_ORDER_KEY = "coach_model_provider_order"
 DEFAULT_PROVIDER_ORDER = ["gemini", "anthropic"]
+TOPIC_DETECT_USER_MESSAGE_INTERVAL = 3
+TOPIC_DETECT_DELAY_SECONDS = 600
+TOPIC_SUMMARY_USER_MESSAGE_WINDOW = 20
 
 
 def _get_provider_order(user_id: int, db: Session) -> list[str]:
@@ -348,7 +352,12 @@ class ChatInput(BaseModel):
 
 
 @router.post("/message/{conversation_id}")
-def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def send_message(
+    conversation_id: int,
+    body: ChatInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     conv = db.query(Conversation).filter_by(id=conversation_id).first()
     if not conv:
         raise HTTPException(404, "Conversation not found")
@@ -389,10 +398,14 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
     except Exception:
         pass
 
-    should_process_topics = _user_message_count(conv) > 0 and _user_message_count(conv) % 5 == 0
+    user_message_count = _user_message_count(conv)
+    should_process_topics = (
+        user_message_count > 0
+        and user_message_count % TOPIC_DETECT_USER_MESSAGE_INTERVAL == 0
+    )
     if should_process_topics:
         try:
-            data = extract_structured_data(conv)
+            data = extract_structured_data(conv, current_user, db)
             conv.training_type = data.get("training_type")
             conv.rpe = data.get("rpe")
             conv.body_status = data.get("body_status")
@@ -405,11 +418,13 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
                 conv,
                 current_user,
                 db,
-                detect_recent_user_messages=5,
-                summarize_recent_user_messages=20,
+                detect_recent_user_messages=TOPIC_DETECT_USER_MESSAGE_INTERVAL,
+                summarize_recent_user_messages=TOPIC_SUMMARY_USER_MESSAGE_WINDOW,
             )
         except Exception:
             pass
+    else:
+        _schedule_delayed_process_topics(conv.id, current_user.id, user_message_count)
 
     db.commit()
 
@@ -419,6 +434,71 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
         "model": model_used,
         "avatar_url": new_avatar_url,
         "topics": _conversation_topic_names(conv.id, db),
+    }
+
+
+def _schedule_delayed_process_topics(conversation_id: int, user_id: int, expected_user_message_count: int):
+    timer = threading.Timer(
+        TOPIC_DETECT_DELAY_SECONDS,
+        _delayed_process_topics,
+        args=(conversation_id, user_id, expected_user_message_count),
+    )
+    timer.daemon = True
+    timer.start()
+
+
+def _delayed_process_topics(conversation_id: int, user_id: int, expected_user_message_count: int):
+    db = next(get_db())
+    try:
+        conv = db.query(Conversation).filter_by(id=conversation_id, user_id=user_id).first()
+        user = db.query(User).filter_by(id=user_id).first()
+        if not conv or not user:
+            return
+        if _user_message_count(conv) != expected_user_message_count:
+            return
+        process_conversation_topics(
+            conv,
+            user,
+            db,
+            detect_recent_user_messages=TOPIC_DETECT_USER_MESSAGE_INTERVAL,
+            summarize_recent_user_messages=TOPIC_SUMMARY_USER_MESSAGE_WINDOW,
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+@router.get("/conversations/{conversation_id}/model-logs")
+def list_model_logs(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conv = db.query(Conversation).filter_by(id=conversation_id).first()
+    if not conv:
+        raise HTTPException(404, "Conversation not found")
+    if conv.user_id != current_user.id:
+        raise HTTPException(403, "无权操作此对话")
+
+    rows = (
+        db.query(ModelCallLog)
+        .filter_by(user_id=current_user.id, conversation_id=conversation_id)
+        .order_by(ModelCallLog.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    return {
+        "logs": [
+            {
+                "id": row.id,
+                "task": row.task,
+                "model": row.model,
+                "request": row.request_json,
+                "response": row.response_text,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
     }
 
 
@@ -439,8 +519,8 @@ def process_topics_for_conversation(
         conv,
         current_user,
         db,
-        detect_recent_user_messages=5,
-        summarize_recent_user_messages=20,
+        detect_recent_user_messages=TOPIC_DETECT_USER_MESSAGE_INTERVAL,
+        summarize_recent_user_messages=TOPIC_SUMMARY_USER_MESSAGE_WINDOW,
     )
     db.commit()
     return {"conversation_id": conv.id, "topics": touched, "current_topics": _conversation_topic_names(conv.id, db)}

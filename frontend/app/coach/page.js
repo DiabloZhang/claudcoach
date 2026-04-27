@@ -22,6 +22,9 @@ export default function CoachPage() {
   const [model, setModel] = useState(null);
   const [providerOrder, setProviderOrder] = useState(['gemini', 'anthropic']);
   const [topics, setTopics] = useState([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const [modelLogs, setModelLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
@@ -98,6 +101,20 @@ export default function CoachPage() {
     }
   };
 
+  const openLogs = async () => {
+    if (!convId) return;
+    setShowLogs(true);
+    setLogsLoading(true);
+    try {
+      const data = await api.coachModelLogs(convId);
+      setModelLogs(data.logs || []);
+    } catch (e) {
+      setModelLogs([{ id: 'error', task: 'error', model: '', response: e.message }]);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
   if (authLoading || loading) return <div className="text-gray-500 text-center py-20">教练上线中...</div>;
 
   return (
@@ -158,6 +175,16 @@ export default function CoachPage() {
         )}
       </div>
 
+      <div className="flex justify-end pb-2">
+        <button
+          onClick={openLogs}
+          disabled={!convId}
+          className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded-lg px-2 py-1 transition-colors disabled:opacity-40"
+        >
+          调用日志
+        </button>
+      </div>
+
       {/* 输入区 */}
       <div className="py-3 flex gap-2 border-t border-gray-800">
         <input
@@ -176,8 +203,81 @@ export default function CoachPage() {
           发送
         </button>
       </div>
+
+      {showLogs && (
+        <ModelLogDrawer
+          logs={modelLogs}
+          loading={logsLoading}
+          onRefresh={openLogs}
+          onClose={() => setShowLogs(false)}
+        />
+      )}
     </div>
   );
+}
+
+function ModelLogDrawer({ logs, loading, onRefresh, onClose }) {
+  return (
+    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-xl border-l border-gray-800 bg-gray-950 shadow-2xl">
+      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold text-white">模型调用日志</div>
+          <div className="text-xs text-gray-500">最近 30 次当前对话调用</div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onRefresh}
+            className="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:border-gray-500"
+          >
+            刷新
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:border-gray-500"
+          >
+            关闭
+          </button>
+        </div>
+      </div>
+      <div className="h-[calc(100vh-3.5rem)] overflow-y-auto p-4 space-y-3">
+        {loading && <div className="text-sm text-gray-500">读取中...</div>}
+        {!loading && logs.length === 0 && <div className="text-sm text-gray-500">暂无日志</div>}
+        {!loading && logs.map(log => (
+          <details key={log.id} className="rounded-lg border border-gray-800 bg-gray-900 p-3" open={false}>
+            <summary className="cursor-pointer text-sm text-gray-200">
+              {log.task} · {log.model || 'unknown'} · {formatLogTime(log.created_at)}
+            </summary>
+            <div className="mt-3 space-y-3">
+              {log.request && (
+                <LogBlock title="Request" value={JSON.stringify(log.request, null, 2)} />
+              )}
+              <LogBlock title="Response" value={log.response || ''} />
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LogBlock({ title, value }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs font-medium text-gray-500">{title}</div>
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-950 p-3 text-xs leading-relaxed text-gray-300">
+        {value}
+      </pre>
+    </div>
+  );
+}
+
+function formatLogTime(value) {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
 }
 
 function MessageBubble({ role, content, typing, avatarUrl }) {

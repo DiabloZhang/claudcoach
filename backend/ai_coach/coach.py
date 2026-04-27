@@ -4,6 +4,7 @@ import httpx
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from db.models import User, Activity, Conversation, CoachPersona
+from ai_coach.call_logs import log_model_call
 from ai_coach.llm import call_llm, LLMTask
 from ai_coach.topics import format_active_injuries
 
@@ -87,7 +88,7 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
 3. 收集够了（通常3-5轮）后做简短总结和一条具体建议
 4. 总结后继续保持对话开放，不要主动宣布对话结束
 5. 用中文回复，口吻：{persona.style}
-6. 每条消息严格不超过500个汉字，在自然停顿处截断，等对方回复后再继续"""
+6. 回复必须完整，不要中途截断；如果信息较多，用分段表达，但不要为了压缩字数丢掉关键问题或建议"""
 
 
 def build_first_message(user: User, persona: CoachPersona, db: Session,
@@ -97,7 +98,9 @@ def build_first_message(user: User, persona: CoachPersona, db: Session,
     trigger = "帮我看看这条训练数据，生成开场白（1-2句，自然，不要说'当然'之类的废话）" if activity \
               else "主动找运动员聊聊最近状态，生成开场白（1-2句）"
 
-    text, model = call_llm(LLMTask.CHAT, system, [{"role": "user", "content": trigger}], provider_order)
+    messages = [{"role": "user", "content": trigger}]
+    text, model = call_llm(LLMTask.CHAT, system, messages, provider_order)
+    log_model_call(db, user.id, None, LLMTask.CHAT, model, system, messages, text)
     return text, model
 
 
@@ -118,6 +121,7 @@ def chat(conversation: Conversation, user_message: str,
     history.append({"role": "user", "content": user_message})
 
     reply, model = call_llm(LLMTask.CHAT, system, history, provider_order)
+    log_model_call(db, user.id, conversation.id, LLMTask.CHAT, model, system, history, reply)
     return reply.replace(DONE_SIGNAL, "").strip(), False, model
 
 
@@ -160,7 +164,7 @@ def detect_persona_name(user_message: str) -> str | None:
         return None
 
 
-def extract_structured_data(conversation: Conversation) -> dict:
+def extract_structured_data(conversation: Conversation, user: User = None, db: Session = None) -> dict:
     history = "\n".join(
         f"{'教练' if m.role == 'coach' else '运动员'}：{m.content}"
         for m in conversation.messages
@@ -178,7 +182,10 @@ def extract_structured_data(conversation: Conversation) -> dict:
   "notes": "一句话总结"
 }}"""
 
-    text, _ = call_llm(LLMTask.EXTRACT, "", [{"role": "user", "content": prompt}])
+    messages = [{"role": "user", "content": prompt}]
+    text, model = call_llm(LLMTask.EXTRACT, "", messages)
+    if user and db:
+        log_model_call(db, user.id, conversation.id, LLMTask.EXTRACT, model, "", messages, text)
     if "```" in text:
         text = text.split("```")[1].replace("json", "").strip()
     try:

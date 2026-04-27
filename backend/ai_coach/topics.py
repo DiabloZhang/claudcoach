@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from ai_coach.call_logs import log_model_call
 from ai_coach.llm import LLMTask, call_llm
 from db.models import (
     Conversation,
@@ -79,7 +80,12 @@ def format_active_injuries(user_id: int, db: Session) -> str:
     return "\n".join(lines)
 
 
-def detect_topics(conversation: Conversation, recent_user_messages: int | None = None) -> list[dict]:
+def detect_topics(
+    conversation: Conversation,
+    user: User,
+    db: Session,
+    recent_user_messages: int | None = None,
+) -> list[dict]:
     history = _conversation_text(conversation, recent_user_messages)
     if not history.strip():
         return []
@@ -103,7 +109,9 @@ def detect_topics(conversation: Conversation, recent_user_messages: int | None =
 }}
 如果没有明确话题，返回 {{"topics": []}}。"""
 
-    text, _ = call_llm(LLMTask.EXTRACT, "", [{"role": "user", "content": prompt}])
+    messages = [{"role": "user", "content": prompt}]
+    text, model = call_llm(LLMTask.EXTRACT, "", messages)
+    log_model_call(db, user.id, conversation.id, LLMTask.EXTRACT, model, "", messages, text)
     data = _parse_json_object(text)
     topics = data.get("topics") or []
     return [
@@ -142,7 +150,9 @@ def summarize_injury_topic(
   "needs_followup": true或false
 }}"""
 
-    text, _ = call_llm(LLMTask.EXTRACT, "", [{"role": "user", "content": prompt}])
+    messages = [{"role": "user", "content": prompt}]
+    text, model = call_llm(LLMTask.EXTRACT, "", messages)
+    log_model_call(db, user.id, conversation.id, LLMTask.EXTRACT, model, "", messages, text)
     data = _parse_json_object(text)
     return {
         "action": data.get("action") or "none",
@@ -249,7 +259,7 @@ def process_conversation_topics(
     summarize_recent_user_messages: int | None = None,
 ) -> list[str]:
     try:
-        topics = detect_topics(conversation, detect_recent_user_messages)
+        topics = detect_topics(conversation, user, db, detect_recent_user_messages)
     except Exception as e:
         logger.warning("Topic detection failed for conversation %s: %s", conversation.id, e)
         return []
