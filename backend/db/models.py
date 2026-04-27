@@ -43,6 +43,7 @@ class User(Base):
     activities = relationship("Activity", back_populates="user")
     data_sources = relationship("UserDataSource", back_populates="user", cascade="all, delete-orphan")
     states = relationship("UserState", back_populates="user", cascade="all, delete-orphan")
+    injuries = relationship("UserInjury", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserDataSource(Base):
@@ -187,6 +188,7 @@ class Conversation(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     messages = relationship("Message", back_populates="conversation", order_by="Message.id")
+    topics = relationship("ConversationTopic", back_populates="conversation", cascade="all, delete-orphan")
 
 
 class Message(Base):
@@ -199,6 +201,47 @@ class Message(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     conversation = relationship("Conversation", back_populates="messages")
+
+
+class ConversationTopic(Base):
+    __tablename__ = "conversation_topics"
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    topic = Column(String, nullable=False, index=True)
+    confidence = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    conversation = relationship("Conversation", back_populates="topics")
+
+
+class UserInjury(Base):
+    __tablename__ = "user_injuries"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String, default="active", index=True)  # active / recovering / resolved
+    body_part = Column(String, nullable=False)
+    summary = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="injuries")
+    conversation_refs = relationship("InjuryConversationRef", back_populates="injury", cascade="all, delete-orphan")
+
+
+class InjuryConversationRef(Base):
+    __tablename__ = "injury_conversation_refs"
+
+    id = Column(Integer, primary_key=True)
+    injury_id = Column(Integer, ForeignKey("user_injuries.id"), nullable=False, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    ref_type = Column(String, default="followup")  # first_mention / followup / resolution
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    injury = relationship("UserInjury", back_populates="conversation_refs")
+    conversation = relationship("Conversation")
 
 
 class Stream(Base):

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from db.models import User, Activity, Conversation, CoachPersona
 from ai_coach.llm import call_llm, LLMTask
+from ai_coach.topics import format_active_injuries
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,9 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
     if activity:
         activity_str = f"\n本次待复盘的训练：\n{_format_activity(activity)}\n"
 
+    injury_str = format_active_injuries(user.id, db)
+    injury_context = f"\n当前需要持续关注的伤病记录：\n{injury_str}\n" if injury_str else ""
+
     return f"""你是{persona.name}，{persona.personality}。
 
 运动员档案：
@@ -76,6 +80,7 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
 近7天训练记录：
 {recent_str}
 {activity_str}
+{injury_context}
 你的职责：
 1. 用自然的对话方式了解这次训练的情况：训练类型（间歇/节奏/有氧恢复/长距离）、主观感受（RPE 1-10）、身体状态（正常/疲劳/疼痛/生病）、生活干扰（工作/睡眠等）
 2. 问题要融入对话，不要像填表一样逐项审问

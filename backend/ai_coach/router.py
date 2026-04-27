@@ -9,6 +9,7 @@ from ai_coach.coach import (
     detect_persona_name, find_avatar_url,
 )
 from ai_coach.llm import LLMTask, MODELS
+from ai_coach.topics import process_conversation_topics
 from config import settings
 from datetime import date
 import traceback
@@ -285,6 +286,10 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
             conv.notes = data.get("notes")
         except Exception:
             pass
+        try:
+            process_conversation_topics(conv, current_user, db)
+        except Exception:
+            pass
 
     db.commit()
 
@@ -294,6 +299,24 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
         "model": model_used,
         "avatar_url": new_avatar_url,
     }
+
+
+@router.post("/conversations/{conversation_id}/process-topics")
+def process_topics_for_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """开发测试用：手动触发当前对话的 topic 整理。"""
+    conv = db.query(Conversation).filter_by(id=conversation_id).first()
+    if not conv:
+        raise HTTPException(404, "Conversation not found")
+    if conv.user_id != current_user.id:
+        raise HTTPException(403, "无权操作此对话")
+
+    touched = process_conversation_topics(conv, current_user, db)
+    db.commit()
+    return {"conversation_id": conv.id, "topics": touched}
 
 
 # ── 活动同步后创建待处理对话（供 sync 调用）──────────────────
