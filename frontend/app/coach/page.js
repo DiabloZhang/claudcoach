@@ -12,8 +12,8 @@ export default function CoachPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [done, setDone] = useState(false);
   const [model, setModel] = useState(null);
+  const [providerOrder, setProviderOrder] = useState(['gemini', 'anthropic']);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
@@ -24,15 +24,18 @@ export default function CoachPage() {
       router.push('/login');
       return;
     }
-    api.coachOpen().then(data => {
+    Promise.all([
+      api.coachOpen(),
+      api.coachModelPreference().catch(() => null),
+    ]).then(([data, pref]) => {
       setConvId(data.conversation_id);
       setMessages(data.messages);
-      setDone(data.status === 'complete');
       if (data.model) setModel(data.model);
       if (data.avatar_url) setAvatarUrl(data.avatar_url);
+      if (pref?.provider_order) setProviderOrder(pref.provider_order);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -40,7 +43,7 @@ export default function CoachPage() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || sending || done) return;
+    if (!text || sending) return;
     setInput('');
     setSending(true);
     setMessages(prev => [...prev, { role: 'user', content: text }]);
@@ -49,7 +52,6 @@ export default function CoachPage() {
       setMessages(prev => [...prev, { role: 'coach', content: res.reply }]);
       if (res.model) setModel(res.model);
       if (res.avatar_url) setAvatarUrl(res.avatar_url);
-      if (res.is_complete) setDone(true);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'coach', content: `出错了：${e.message}` }]);
     } finally {
@@ -63,7 +65,6 @@ export default function CoachPage() {
       const data = await api.coachNew();
       setConvId(data.conversation_id);
       setMessages(data.messages);
-      setDone(false);
       if (data.model) setModel(data.model);
       if (data.avatar_url) setAvatarUrl(data.avatar_url);
     } catch (e) {
@@ -73,12 +74,36 @@ export default function CoachPage() {
     }
   };
 
+  const updateProviderPreference = async (primary) => {
+    const next = primary === 'anthropic'
+      ? ['anthropic', 'gemini']
+      : ['gemini', 'anthropic'];
+    setProviderOrder(next);
+    try {
+      const pref = await api.updateCoachModelPreference(next);
+      if (pref?.provider_order) setProviderOrder(pref.provider_order);
+    } catch (e) {
+      alert('模型优先级保存失败：' + e.message);
+    }
+  };
+
   if (authLoading || loading) return <div className="text-gray-500 text-center py-20">教练上线中...</div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] sm:h-[calc(100vh-7rem)] max-w-2xl mx-auto">
       {/* 顶部栏 */}
-      <div className="flex justify-end py-2">
+      <div className="flex justify-between items-center gap-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <span>优先模型</span>
+          <select
+            value={providerOrder[0] || 'gemini'}
+            onChange={e => updateProviderPreference(e.target.value)}
+            className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 text-gray-300 focus:outline-none focus:border-gray-500"
+          >
+            <option value="gemini">Gemini</option>
+            <option value="anthropic">Claude</option>
+          </select>
+        </div>
         <button
           onClick={startNew}
           disabled={starting}
@@ -108,27 +133,23 @@ export default function CoachPage() {
       )}
 
       {/* 输入区 */}
-      {done ? (
-        <div className="py-4 text-center text-gray-500 text-sm">本次对话已结束</div>
-      ) : (
-        <div className="py-3 flex gap-2 border-t border-gray-800">
-          <input
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-gray-500"
-            placeholder="跟教练说点什么..."
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-            disabled={sending}
-          />
-          <button
-            onClick={send}
-            disabled={sending || !input.trim()}
-            className="px-4 py-3 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium transition-colors text-sm"
-          >
-            发送
-          </button>
-        </div>
-      )}
+      <div className="py-3 flex gap-2 border-t border-gray-800">
+        <input
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-gray-500"
+          placeholder="跟教练说点什么..."
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+          disabled={sending}
+        />
+        <button
+          onClick={send}
+          disabled={sending || !input.trim()}
+          className="px-4 py-3 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium transition-colors text-sm"
+        >
+          发送
+        </button>
+      </div>
     </div>
   );
 }

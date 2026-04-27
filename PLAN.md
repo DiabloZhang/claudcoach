@@ -352,9 +352,11 @@ claudcoach/
 - [ ] 对话结束后单独 Claude call 提取结构化数据存 DB
 - [ ] 对话历史持久化，作为未来 prompt context
 - [ ] 对话后自动写入摘要记忆，并按 topic 触发对应结构化更新
-- [ ] 对话过程中维护会话级 topic 标记（如 injury / recovery / schedule），结束时只整理本轮实际触发的 topics
+- [ ] 对话保持开放，coach 不主动结束和锁定输入；topic 整理不再绑定“结束对话”
+- [ ] 每 5 条用户消息触发一次 topic detection 与已触发 topic 的总结提炼；手动测试 endpoint 可随时触发整理
 - [ ] `session` 与 `conversation` 概念拆开：用户与 coach 的长期关系可挂在同一条 conversation 之下，但每次打开页面、每轮主动触发、或一次相对完整的话题往返，都应形成独立 session，便于做 topic 整理、任务跟进和上下文裁剪
 - [ ] topic 结构化记录需保留与原始会话的关联，支持从 `user_injury` 等 topic 表回溯到首次提及、最近跟进和关键对话原文
+- [ ] Coach 页面支持用户选择 LLM provider 优先级，至少提供 Gemini 优先 / Claude 优先；后端仍可在首选 provider 失败时 fallback，但要向用户展示实际使用的模型
 
 #### 3.3 主动触发场景
 - [ ] 新活动同步后：训练复盘对话（最高优先级）

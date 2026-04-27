@@ -40,7 +40,7 @@ def _format_activity(a: Activity) -> str:
 
 
 def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
-                          activity: Activity = None, ctl=None, atl=None, tsb=None) -> str:
+                         activity: Activity = None, ctl=None, atl=None, tsb=None) -> str:
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     recent = (db.query(Activity)
               .filter(Activity.user_id == user.id, Activity.start_date >= week_ago,
@@ -85,24 +85,26 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
 1. 用自然的对话方式了解这次训练的情况：训练类型（间歇/节奏/有氧恢复/长距离）、主观感受（RPE 1-10）、身体状态（正常/疲劳/疼痛/生病）、生活干扰（工作/睡眠等）
 2. 问题要融入对话，不要像填表一样逐项审问
 3. 收集够了（通常3-5轮）后做简短总结和一条具体建议
-4. 总结完毕后在消息末尾加上 {DONE_SIGNAL}
+4. 总结后继续保持对话开放，不要主动宣布对话结束
 5. 用中文回复，口吻：{persona.style}
 6. 每条消息严格不超过500个汉字，在自然停顿处截断，等对方回复后再继续"""
 
 
 def build_first_message(user: User, persona: CoachPersona, db: Session,
-                         activity: Activity = None, ctl=None, atl=None, tsb=None) -> str:
+                        activity: Activity = None, ctl=None, atl=None, tsb=None,
+                        provider_order: list[str] | None = None) -> str:
     system = _build_system_prompt(user, persona, db, activity, ctl, atl, tsb)
     trigger = "帮我看看这条训练数据，生成开场白（1-2句，自然，不要说'当然'之类的废话）" if activity \
               else "主动找运动员聊聊最近状态，生成开场白（1-2句）"
 
-    text, model = call_llm(LLMTask.CHAT, system, [{"role": "user", "content": trigger}])
+    text, model = call_llm(LLMTask.CHAT, system, [{"role": "user", "content": trigger}], provider_order)
     return text, model
 
 
 def chat(conversation: Conversation, user_message: str,
          user: User, persona: CoachPersona, db: Session,
-         ctl=None, atl=None, tsb=None) -> tuple[str, bool]:
+         ctl=None, atl=None, tsb=None,
+         provider_order: list[str] | None = None) -> tuple[str, bool]:
     activity = None
     if conversation.activity_id:
         activity = db.query(Activity).filter_by(id=conversation.activity_id).first()
@@ -115,9 +117,8 @@ def chat(conversation: Conversation, user_message: str,
         history.append({"role": role, "content": msg.content})
     history.append({"role": "user", "content": user_message})
 
-    reply, model = call_llm(LLMTask.CHAT, system, history)
-    is_done = DONE_SIGNAL in reply
-    return reply.replace(DONE_SIGNAL, "").strip(), is_done, model
+    reply, model = call_llm(LLMTask.CHAT, system, history, provider_order)
+    return reply.replace(DONE_SIGNAL, "").strip(), False, model
 
 
 def find_avatar_url(name: str) -> str | None:

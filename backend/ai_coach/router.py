@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from db.database import get_db
-from db.models import User, Activity, Conversation, Message
+from db.models import User, Activity, Conversation, Message, UserState
 from auth.dependencies import get_current_user
 from ai_coach.coach import (
     get_or_create_persona, build_first_message, chat, extract_structured_data,
@@ -15,6 +15,54 @@ from datetime import date
 import traceback
 
 router = APIRouter(prefix="/coach", tags=["coach"])
+
+MODEL_PROVIDER_ORDER_KEY = "coach_model_provider_order"
+DEFAULT_PROVIDER_ORDER = ["gemini", "anthropic"]
+
+
+def _get_provider_order(user_id: int, db: Session) -> list[str]:
+    state = db.query(UserState).filter_by(
+        user_id=user_id,
+        state_key=MODEL_PROVIDER_ORDER_KEY,
+    ).first()
+    if not state:
+        return DEFAULT_PROVIDER_ORDER
+    try:
+        import json
+        order = json.loads(state.state_value)
+    except Exception:
+        return DEFAULT_PROVIDER_ORDER
+    order = [p for p in order if p in ("gemini", "anthropic")]
+    for provider in DEFAULT_PROVIDER_ORDER:
+        if provider not in order:
+            order.append(provider)
+    return order
+
+
+def _set_provider_order(user_id: int, db: Session, order: list[str]) -> list[str]:
+    import json
+
+    clean = [p for p in order if p in ("gemini", "anthropic")]
+    if not clean:
+        clean = DEFAULT_PROVIDER_ORDER
+    for provider in DEFAULT_PROVIDER_ORDER:
+        if provider not in clean:
+            clean.append(provider)
+
+    state = db.query(UserState).filter_by(
+        user_id=user_id,
+        state_key=MODEL_PROVIDER_ORDER_KEY,
+    ).first()
+    if not state:
+        state = UserState(user_id=user_id, state_key=MODEL_PROVIDER_ORDER_KEY, state_value="[]")
+        db.add(state)
+    state.state_value = json.dumps(clean, ensure_ascii=False)
+    db.commit()
+    return clean
+
+
+def _user_message_count(conv: Conversation) -> int:
+    return sum(1 for msg in conv.messages if msg.role == "user")
 
 
 @router.get("/debug")
@@ -107,6 +155,27 @@ def update_persona(body: PersonaUpdate, current_user: User = Depends(get_current
     return {"ok": True}
 
 
+class ModelPreferenceUpdate(BaseModel):
+    provider_order: list[str]
+
+
+@router.get("/model-preference")
+def get_model_preference(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return {
+        "provider_order": _get_provider_order(current_user.id, db),
+        "available_providers": DEFAULT_PROVIDER_ORDER,
+    }
+
+
+@router.put("/model-preference")
+def update_model_preference(
+    body: ModelPreferenceUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return {"provider_order": _set_provider_order(current_user.id, db, body.provider_order)}
+
+
 # ── 对话列表 ──────────────────────────────────────────────
 
 @router.get("/conversations")
@@ -133,6 +202,7 @@ def list_conversations(current_user: User = Depends(get_current_user), db: Sessi
 def open_coach(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     persona = get_or_create_persona(current_user.id, db)
     ctl, atl, tsb = _get_fitness_values(current_user.id, db)
+    provider_order = _get_provider_order(current_user.id, db)
     model_used = None
 
     # 优先找最老的 pending 对话
@@ -163,7 +233,7 @@ def open_coach(current_user: User = Depends(get_current_user), db: Session = Dep
 
         model_used = "fallback"
         try:
-            first_msg, model_used = build_first_message(current_user, persona, db, activity, ctl, atl, tsb)
+            first_msg, model_used = build_first_message(current_user, persona, db, activity, ctl, atl, tsb, provider_order)
         except Exception as e:
             first_msg = f"你好，{current_user.firstname or '运动员'}！我是你的教练 {persona.name}，跟我聊聊最近的训练吧。"
             import logging
@@ -198,6 +268,7 @@ def open_coach(current_user: User = Depends(get_current_user), db: Session = Dep
 def new_conversation(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     persona = get_or_create_persona(current_user.id, db)
     ctl, atl, tsb = _get_fitness_values(current_user.id, db)
+    provider_order = _get_provider_order(current_user.id, db)
 
     conv = Conversation(user_id=current_user.id, trigger="chat", status="active")
     db.add(conv)
@@ -206,7 +277,7 @@ def new_conversation(current_user: User = Depends(get_current_user), db: Session
 
     model_used = "fallback"
     try:
-        first_msg, model_used = build_first_message(current_user, persona, db, None, ctl, atl, tsb)
+        first_msg, model_used = build_first_message(current_user, persona, db, None, ctl, atl, tsb, provider_order)
     except Exception as e:
         first_msg = f"新对话开始！{current_user.firstname or '运动员'}，最近训练怎么样？"
         import logging
@@ -241,17 +312,18 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
     if conv.user_id != current_user.id:
         raise HTTPException(403, "无权操作此对话")
     if conv.status == "complete":
-        raise HTTPException(400, "Conversation already complete")
+        conv.status = "active"
 
     persona = get_or_create_persona(current_user.id, db)
     ctl, atl, tsb = _get_fitness_values(current_user.id, db)
+    provider_order = _get_provider_order(current_user.id, db)
 
     # 存用户消息
     db.add(Message(conversation_id=conv.id, role="user", content=body.content))
     db.commit()
 
     try:
-        reply, is_done, model_used = chat(conv, body.content, current_user, persona, db, ctl, atl, tsb)
+        reply, is_done, model_used = chat(conv, body.content, current_user, persona, db, ctl, atl, tsb, provider_order)
     except Exception as e:
         import logging
         logging.error(f"Coach chat failed: {e}")
@@ -259,6 +331,8 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
 
     # 存教练回复
     db.add(Message(conversation_id=conv.id, role="coach", content=reply))
+    db.flush()
+    db.expire(conv, ["messages"])
 
     # 检测用户是否在设置新身份，若是则搜索头像
     new_avatar_url = None
@@ -272,11 +346,8 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
     except Exception:
         pass
 
-    if is_done:
-        conv.status = "complete"
-        # 异步提取结构化数据
-        db.commit()
-        db.refresh(conv)
+    should_process_topics = _user_message_count(conv) > 0 and _user_message_count(conv) % 5 == 0
+    if should_process_topics:
         try:
             data = extract_structured_data(conv)
             conv.training_type = data.get("training_type")
@@ -287,7 +358,7 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
         except Exception:
             pass
         try:
-            process_conversation_topics(conv, current_user, db)
+            process_conversation_topics(conv, current_user, db, recent_user_messages=5)
         except Exception:
             pass
 

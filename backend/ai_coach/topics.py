@@ -20,10 +20,21 @@ ACTIVE_INJURY_STATUSES = ("active", "recovering")
 COACH_TASKS_KEY = "coach_tasks"
 
 
-def _conversation_text(conversation: Conversation) -> str:
+def _conversation_text(conversation: Conversation, recent_user_messages: int | None = None) -> str:
+    messages = list(conversation.messages)
+    if recent_user_messages:
+        user_seen = 0
+        start_idx = 0
+        for idx in range(len(messages) - 1, -1, -1):
+            if messages[idx].role == "user":
+                user_seen += 1
+                if user_seen == recent_user_messages:
+                    start_idx = idx
+                    break
+        messages = messages[start_idx:]
     return "\n".join(
         f"{'教练' if m.role == 'coach' else '运动员'}：{m.content}"
-        for m in conversation.messages
+        for m in messages
     )
 
 
@@ -68,8 +79,8 @@ def format_active_injuries(user_id: int, db: Session) -> str:
     return "\n".join(lines)
 
 
-def detect_topics(conversation: Conversation) -> list[dict]:
-    history = _conversation_text(conversation)
+def detect_topics(conversation: Conversation, recent_user_messages: int | None = None) -> list[dict]:
+    history = _conversation_text(conversation, recent_user_messages)
     if not history.strip():
         return []
 
@@ -105,8 +116,13 @@ def detect_topics(conversation: Conversation) -> list[dict]:
     ]
 
 
-def summarize_injury_topic(conversation: Conversation, user: User, db: Session) -> dict:
-    history = _conversation_text(conversation)
+def summarize_injury_topic(
+    conversation: Conversation,
+    user: User,
+    db: Session,
+    recent_user_messages: int | None = None,
+) -> dict:
+    history = _conversation_text(conversation, recent_user_messages)
     existing = format_active_injuries(user.id, db) or "无"
     prompt = f"""从以下对话中整理伤病 topic 的最小记录。不要做医学诊断，只提炼教练后续需要持续跟进的信息。
 
@@ -225,9 +241,14 @@ def ensure_injury_followup_task(user_id: int, injury: UserInjury, db: Session) -
     state.state_value = json.dumps(tasks, ensure_ascii=False)
 
 
-def process_conversation_topics(conversation: Conversation, user: User, db: Session) -> list[str]:
+def process_conversation_topics(
+    conversation: Conversation,
+    user: User,
+    db: Session,
+    recent_user_messages: int | None = None,
+) -> list[str]:
     try:
-        topics = detect_topics(conversation)
+        topics = detect_topics(conversation, recent_user_messages)
     except Exception as e:
         logger.warning("Topic detection failed for conversation %s: %s", conversation.id, e)
         return []
@@ -253,7 +274,7 @@ def process_conversation_topics(conversation: Conversation, user: User, db: Sess
 
     if "injury" in touched:
         try:
-            update = summarize_injury_topic(conversation, user, db)
+            update = summarize_injury_topic(conversation, user, db, recent_user_messages)
             upsert_user_injury(user, conversation, update, db)
         except Exception as e:
             logger.warning("Injury topic processing failed for conversation %s: %s", conversation.id, e)

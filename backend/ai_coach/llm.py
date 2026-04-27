@@ -83,30 +83,36 @@ def _call_anthropic(task: LLMTask, system: str, messages: list[dict]) -> str:
     return resp.content[0].text
 
 
-def call_llm(task: LLMTask, system: str, messages: list[dict]) -> tuple[str, str]:
+def call_llm(
+    task: LLMTask,
+    system: str,
+    messages: list[dict],
+    provider_order: list[str] | None = None,
+) -> tuple[str, str]:
     """
     统一调用入口。优先用 settings.llm_provider，失败自动切另一个。
     返回 (reply_text, model_name_used)
     """
-    primary = settings.llm_provider
-    fallback = "anthropic" if primary == "gemini" else "gemini"
+    if provider_order:
+        order = [p for p in provider_order if p in ("gemini", "anthropic")]
+    else:
+        order = [settings.llm_provider] if settings.llm_provider in ("gemini", "anthropic") else []
+    for provider in ("gemini", "anthropic"):
+        if provider not in order:
+            order.append(provider)
 
     callers = {
         "gemini": _call_gemini,
         "anthropic": _call_anthropic,
     }
 
-    # 主力 provider
-    try:
-        text = callers[primary](task, system, messages)
-        return text, MODELS[primary][task]
-    except Exception as e:
-        logger.error(f"LLM primary ({primary}/{MODELS[primary][task]}) failed: {e}, trying fallback...")
-
-    # 降级 provider
-    try:
-        text = callers[fallback](task, system, messages)
-        return text, MODELS[fallback][task]
-    except Exception as e:
-        logger.error(f"LLM fallback ({fallback}/{MODELS[fallback][task]}) also failed: {e}")
-        raise RuntimeError(f"所有 LLM provider 均不可用：{e}")
+    last_error = None
+    for idx, provider in enumerate(order):
+        try:
+            text = callers[provider](task, system, messages)
+            return text, MODELS[provider][task]
+        except Exception as e:
+            last_error = e
+            label = "primary" if idx == 0 else "fallback"
+            logger.error(f"LLM {label} ({provider}/{MODELS[provider][task]}) failed: {e}")
+    raise RuntimeError(f"所有 LLM provider 均不可用：{last_error}")
