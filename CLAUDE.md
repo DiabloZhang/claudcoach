@@ -44,3 +44,4 @@
 - 不要直接 push 到 `main`。所有改动通过 feature branch → PR → merge。
 - 修改数据库模型时，请同时考虑 PostgreSQL 和 SQLite 兼容性。
 - 临时需求记在 `PLAN.md` 的「临时需求」section，开发日志写在 `docs/devlog/YYYY-MM-DD.md`。
+- 每次对 `PLAN.md` 相关内容进行讨论并形成明确决策后，必须同步更新 `PLAN.md`，包括路线调整、优先级变化、延期原因和阶段性取舍，避免口头结论丢失。

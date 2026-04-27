@@ -2,6 +2,12 @@
 
 AI-Powered Triathlon Training Assistant — connects to Strava, analyzes your training data, and gives you a proactive AI coach.
 
+## Collaboration Notes
+
+- Project-level working memory and agent instructions live in the root [CLAUDE.md](CLAUDE.md).
+- Any coding agent working in this repo should read `README.md` first, then load the root `CLAUDE.md` before making changes.
+- Subdirectory-level agent guidance may exist (for example `frontend/CLAUDE.md` or `frontend/AGENTS.md`), but the root `CLAUDE.md` is the project-wide source of truth.
+
 ## Features
 
 - **Strava Integration**: Sync all your swim, bike, run activities
