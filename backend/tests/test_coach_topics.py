@@ -45,10 +45,11 @@ def test_injury_topic_creates_persistent_injury_memory(db_session, monkeypatch):
 
     monkeypatch.setattr(topics, "call_llm", fake_call_llm)
 
-    touched = topics.process_conversation_topics(conv, user, db_session)
+    result = topics.process_conversation_topics(conv, user, db_session)
     db_session.commit()
 
-    assert touched == ["injury"]
+    assert result["topics"] == ["injury"]
+    assert result["injury_saved"] is True
 
     topic = db_session.query(ConversationTopic).filter_by(conversation_id=conv.id).one()
     assert topic.topic == "injury"
@@ -67,3 +68,84 @@ def test_injury_topic_creates_persistent_injury_memory(db_session, monkeypatch):
     tasks = json.loads(state.state_value)
     assert tasks[0]["type"] == "injury_followup"
     assert tasks[0]["injury_id"] == injury.id
+
+
+def test_injury_topic_without_body_part_still_creates_memory(db_session, monkeypatch):
+    user = User(email="injury-fallback@example.com", nickname="Injured Athlete")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    conv = Conversation(user_id=user.id, trigger="chat", status="active")
+    db_session.add(conv)
+    db_session.commit()
+    db_session.refresh(conv)
+    db_session.add(Message(
+        conversation_id=conv.id,
+        role="user",
+        content="最近一直有牵拉痛，但我还没说清楚具体位置。",
+    ))
+    db_session.commit()
+
+    def fake_call_llm(task, system, messages):
+        prompt = messages[0]["content"]
+        if "触发了哪些话题" in prompt:
+            return json.dumps({
+                "topics": [{"name": "injury", "confidence": 0.9}]
+            }), "fake-model"
+        return json.dumps({
+            "action": "create_or_update",
+            "status": "active",
+            "body_part": "",
+            "summary": "用户提到持续牵拉痛，但具体部位待确认。",
+            "notes": "",
+            "needs_followup": False,
+        }, ensure_ascii=False), "fake-model"
+
+    monkeypatch.setattr(topics, "call_llm", fake_call_llm)
+
+    result = topics.process_conversation_topics(conv, user, db_session)
+    db_session.commit()
+
+    assert result["topics"] == ["injury"]
+    assert result["injury_saved"] is True
+    injury = db_session.query(UserInjury).filter_by(user_id=user.id).one()
+    assert injury.body_part == "未明确部位"
+
+
+def test_injury_topic_summary_failure_creates_fallback_memory(db_session, monkeypatch):
+    user = User(email="injury-error@example.com", nickname="Injured Athlete")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    conv = Conversation(user_id=user.id, trigger="chat", status="active")
+    db_session.add(conv)
+    db_session.commit()
+    db_session.refresh(conv)
+    db_session.add(Message(
+        conversation_id=conv.id,
+        role="user",
+        content="左腿后侧痛了十个月，比赛后更明显。",
+    ))
+    db_session.commit()
+
+    def fake_call_llm(task, system, messages):
+        prompt = messages[0]["content"]
+        if "触发了哪些话题" in prompt:
+            return json.dumps({
+                "topics": [{"name": "injury", "confidence": 0.95}]
+            }), "fake-model"
+        raise RuntimeError("summary model unavailable")
+
+    monkeypatch.setattr(topics, "call_llm", fake_call_llm)
+
+    result = topics.process_conversation_topics(conv, user, db_session)
+    db_session.commit()
+
+    assert result["topics"] == ["injury"]
+    assert result["injury_saved"] is True
+    assert "injury_processing_failed" in result["error"]
+    injury = db_session.query(UserInjury).filter_by(user_id=user.id).one()
+    assert injury.body_part == "未明确部位"
+    assert "自动总结失败" in injury.notes

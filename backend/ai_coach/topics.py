@@ -164,6 +164,21 @@ def summarize_injury_topic(
     }
 
 
+def _fallback_injury_update(conversation: Conversation, recent_user_messages: int | None, error: Exception) -> dict:
+    history = _conversation_text(conversation, recent_user_messages)
+    compact = " ".join(line.strip() for line in history.splitlines() if line.strip())
+    if len(compact) > 500:
+        compact = compact[:500] + "..."
+    return {
+        "action": "create_or_update",
+        "status": "active",
+        "body_part": "",
+        "summary": "检测到用户正在讨论伤病，但自动总结失败，需后续补充。",
+        "notes": f"自动总结失败：{type(error).__name__}: {error}。最近对话摘录：{compact}",
+        "needs_followup": True,
+    }
+
+
 def _find_matching_injury(user_id: int, body_part: str, db: Session) -> UserInjury | None:
     normalized = (body_part or "").strip().lower()
     if not normalized:
@@ -178,9 +193,11 @@ def _find_matching_injury(user_id: int, body_part: str, db: Session) -> UserInju
 
 def upsert_user_injury(user: User, conversation: Conversation, update: dict, db: Session) -> UserInjury | None:
     action = update.get("action")
-    body_part = update.get("body_part")
-    if action == "none" or not body_part:
+    body_part = (update.get("body_part") or "").strip()
+    if action == "none":
         return None
+    if not body_part:
+        body_part = "未明确部位"
 
     injury = _find_matching_injury(user.id, body_part, db)
     is_new = injury is None
@@ -257,12 +274,21 @@ def process_conversation_topics(
     db: Session,
     detect_recent_user_messages: int | None = None,
     summarize_recent_user_messages: int | None = None,
-) -> list[str]:
+) -> dict:
+    result = {
+        "topics": [],
+        "injury_detected": False,
+        "injury_saved": False,
+        "injury_id": None,
+        "injury_update": None,
+        "error": None,
+    }
     try:
         topics = detect_topics(conversation, user, db, detect_recent_user_messages)
     except Exception as e:
         logger.warning("Topic detection failed for conversation %s: %s", conversation.id, e)
-        return []
+        result["error"] = f"topic_detection_failed: {type(e).__name__}: {e}"
+        return result
 
     touched = []
     db.query(ConversationTopic).filter_by(conversation_id=conversation.id).delete()
@@ -277,12 +303,25 @@ def process_conversation_topics(
             confidence=confidence,
         ))
         touched.append(name)
+    result["topics"] = touched
 
     if "injury" in touched:
+        result["injury_detected"] = True
         try:
             update = summarize_injury_topic(conversation, user, db, summarize_recent_user_messages)
-            upsert_user_injury(user, conversation, update, db)
+            result["injury_update"] = update
+            injury = upsert_user_injury(user, conversation, update, db)
+            if injury:
+                result["injury_saved"] = True
+                result["injury_id"] = injury.id
         except Exception as e:
             logger.warning("Injury topic processing failed for conversation %s: %s", conversation.id, e)
+            update = _fallback_injury_update(conversation, summarize_recent_user_messages, e)
+            result["injury_update"] = update
+            injury = upsert_user_injury(user, conversation, update, db)
+            if injury:
+                result["injury_saved"] = True
+                result["injury_id"] = injury.id
+            result["error"] = f"injury_processing_failed: {type(e).__name__}: {e}"
 
-    return touched
+    return result

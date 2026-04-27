@@ -414,16 +414,17 @@ def send_message(
         except Exception:
             pass
         try:
-            process_conversation_topics(
+            topic_result = process_conversation_topics(
                 conv,
                 current_user,
                 db,
                 detect_recent_user_messages=TOPIC_DETECT_USER_MESSAGE_INTERVAL,
                 summarize_recent_user_messages=TOPIC_SUMMARY_USER_MESSAGE_WINDOW,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            topic_result = {"topics": [], "error": f"{type(e).__name__}: {e}"}
     else:
+        topic_result = {"topics": _conversation_topic_names(conv.id, db), "scheduled": True}
         _schedule_delayed_process_topics(conv.id, current_user.id, user_message_count)
 
     db.commit()
@@ -434,6 +435,7 @@ def send_message(
         "model": model_used,
         "avatar_url": new_avatar_url,
         "topics": _conversation_topic_names(conv.id, db),
+        "topic_processing": topic_result,
     }
 
 
@@ -456,13 +458,16 @@ def _delayed_process_topics(conversation_id: int, user_id: int, expected_user_me
             return
         if _user_message_count(conv) != expected_user_message_count:
             return
-        process_conversation_topics(
+        result = process_conversation_topics(
             conv,
             user,
             db,
             detect_recent_user_messages=TOPIC_DETECT_USER_MESSAGE_INTERVAL,
             summarize_recent_user_messages=TOPIC_SUMMARY_USER_MESSAGE_WINDOW,
         )
+        if result.get("error"):
+            import logging
+            logging.warning("Delayed topic processing result for conversation %s: %s", conversation_id, result)
         db.commit()
     finally:
         db.close()
@@ -515,7 +520,7 @@ def process_topics_for_conversation(
     if conv.user_id != current_user.id:
         raise HTTPException(403, "无权操作此对话")
 
-    touched = process_conversation_topics(
+    result = process_conversation_topics(
         conv,
         current_user,
         db,
@@ -523,7 +528,7 @@ def process_topics_for_conversation(
         summarize_recent_user_messages=TOPIC_SUMMARY_USER_MESSAGE_WINDOW,
     )
     db.commit()
-    return {"conversation_id": conv.id, "topics": touched, "current_topics": _conversation_topic_names(conv.id, db)}
+    return {"conversation_id": conv.id, **result, "current_topics": _conversation_topic_names(conv.id, db)}
 
 
 # ── 活动同步后创建待处理对话（供 sync 调用）──────────────────
