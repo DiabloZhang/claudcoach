@@ -12,17 +12,18 @@ def log_model_call(
     db: Session,
     user_id: int,
     conversation_id: int | None,
-    task: LLMTask,
+    task: LLMTask | str,
     model: str,
     system: str,
     messages: list[dict],
     response_text: str,
 ) -> None:
     try:
+        task_name = task.value if isinstance(task, LLMTask) else str(task)
         db.add(ModelCallLog(
             user_id=user_id,
             conversation_id=conversation_id,
-            task=task.value,
+            task=task_name,
             model=model,
             request_json={
                 "system": system,

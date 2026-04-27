@@ -203,8 +203,8 @@ def update_model_preference(
 def list_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     convs = (db.query(Conversation)
              .filter_by(user_id=current_user.id)
-             .order_by(Conversation.created_at.desc())
-             .limit(20).all())
+             .order_by(Conversation.updated_at.desc(), Conversation.created_at.desc())
+             .limit(50).all())
     return [
         {
             "id": c.id,
@@ -212,9 +212,37 @@ def list_conversations(current_user: User = Depends(get_current_user), db: Sessi
             "status": c.status,
             "notes": c.notes,
             "created_at": c.created_at,
+            "updated_at": c.updated_at,
+            "message_count": len(c.messages),
+            "preview": next((m.content for m in reversed(c.messages) if m.content), ""),
+            "topics": _conversation_topic_names(c.id, db),
         }
         for c in convs
     ]
+
+
+@router.get("/conversations/{conversation_id}")
+def get_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conv = db.query(Conversation).filter_by(id=conversation_id).first()
+    if not conv:
+        raise HTTPException(404, "Conversation not found")
+    if conv.user_id != current_user.id:
+        raise HTTPException(403, "无权操作此对话")
+
+    return {
+        "conversation_id": conv.id,
+        "trigger": conv.trigger,
+        "status": conv.status,
+        "topics": _conversation_topic_names(conv.id, db),
+        "messages": [
+            {"role": m.role, "content": m.content, "created_at": m.created_at}
+            for m in conv.messages
+        ],
+    }
 
 
 @router.get("/notes")

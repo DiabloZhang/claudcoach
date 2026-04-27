@@ -13,6 +13,14 @@ const TOPIC_LABELS = {
   goal: '目标',
 };
 
+const LOG_TASK_LABELS = {
+  chat: 'chat',
+  extract: 'extract',
+  categorize_topic: 'categorize topic',
+  summarize_injury: 'summarize injury',
+  error: 'error',
+};
+
 export default function CoachPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -25,8 +33,11 @@ export default function CoachPage() {
   const [providerOrder, setProviderOrder] = useState(['gemini', 'anthropic']);
   const [topics, setTopics] = useState([]);
   const [showInfo, setShowInfo] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
   const [modelLogs, setModelLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [processingTopics, setProcessingTopics] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
@@ -116,9 +127,51 @@ export default function CoachPage() {
     }
   };
 
+  const loadConversations = async () => {
+    setConversationsLoading(true);
+    try {
+      const data = await api.coachConversations();
+      setConversations(data || []);
+    } catch {
+      setConversations([]);
+    } finally {
+      setConversationsLoading(false);
+    }
+  };
+
+  const loadConversation = async (id) => {
+    try {
+      const data = await api.coachConversation(id);
+      setConvId(data.conversation_id);
+      setMessages(data.messages || []);
+      setTopics(data.topics || []);
+      setModelLogs([]);
+      setShowInfo(false);
+    } catch (e) {
+      alert('读取历史对话失败：' + e.message);
+    }
+  };
+
+  const processTopicsNow = async () => {
+    if (!convId || processingTopics) return;
+    setProcessingTopics(true);
+    try {
+      const data = await api.coachProcessTopics(convId);
+      setTopics(data.current_topics || data.topics || []);
+      await loadLogs();
+      await loadConversations();
+      alert(data.injury_saved ? '已整理到教练笔记' : `已执行整理，但未写入伤病记录：${data.error || '未检测到需要写入的伤病信息'}`);
+    } catch (e) {
+      alert('整理笔记失败：' + e.message);
+    } finally {
+      setProcessingTopics(false);
+    }
+  };
+
   const openInfo = async () => {
     setShowInfo(true);
     loadLogs();
+    loadConversations();
   };
 
   if (authLoading || loading) return <div className="text-gray-500 text-center py-20">教练上线中...</div>;
@@ -182,9 +235,15 @@ export default function CoachPage() {
           topics={topics}
           providerOrder={providerOrder}
           onProviderChange={updateProviderPreference}
+          conversations={conversations}
+          conversationsLoading={conversationsLoading}
+          currentConversationId={convId}
+          onSelectConversation={loadConversation}
           logs={modelLogs}
           loading={logsLoading}
           onRefresh={loadLogs}
+          processingTopics={processingTopics}
+          onProcessTopics={processTopicsNow}
           onClose={() => setShowInfo(false)}
         />
       )}
@@ -197,9 +256,15 @@ function ConversationInfoDrawer({
   topics,
   providerOrder,
   onProviderChange,
+  conversations,
+  conversationsLoading,
+  currentConversationId,
+  onSelectConversation,
   logs,
   loading,
   onRefresh,
+  processingTopics,
+  onProcessTopics,
   onClose,
 }) {
   return (
@@ -260,13 +325,64 @@ function ConversationInfoDrawer({
           )}
         </div>
 
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-xs font-medium text-gray-500">教练笔记整理</div>
+            <button
+              onClick={onProcessTopics}
+              disabled={processingTopics}
+              className="rounded-lg border border-orange-500/60 px-2 py-1 text-xs text-orange-200 hover:border-orange-400 disabled:opacity-50"
+            >
+              {processingTopics ? '整理中...' : '整理当前对话'}
+            </button>
+          </div>
+          <div className="text-xs leading-relaxed text-gray-500">
+            这会触发 topic categorization 和 injury summary，并在日志里留下对应调用。
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-3">
+          <div className="mb-3 text-xs font-medium text-gray-500">历史对话</div>
+          {conversationsLoading && <div className="text-xs text-gray-600">读取中...</div>}
+          {!conversationsLoading && conversations.length === 0 && (
+            <div className="text-xs text-gray-600">暂无历史对话</div>
+          )}
+          {!conversationsLoading && conversations.length > 0 && (
+            <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+              {conversations.map(conv => (
+                <button
+                  key={conv.id}
+                  onClick={() => onSelectConversation(conv.id)}
+                  className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                    conv.id === currentConversationId
+                      ? 'border-orange-500/60 bg-orange-500/10'
+                      : 'border-gray-800 bg-gray-950 hover:border-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-gray-300">
+                      对话 #{conv.id}
+                    </span>
+                    <span className="text-[11px] text-gray-600">
+                      {formatLogTime(conv.updated_at || conv.created_at)}
+                    </span>
+                  </div>
+                  <div className="mt-1 max-h-9 overflow-hidden text-xs text-gray-500">
+                    {conv.preview || conv.notes || '空对话'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="pt-2 text-xs font-medium text-gray-500">模型调用日志</div>
         {loading && <div className="text-sm text-gray-500">读取中...</div>}
         {!loading && logs.length === 0 && <div className="text-sm text-gray-500">暂无日志</div>}
         {!loading && logs.map(log => (
           <details key={log.id} className="rounded-lg border border-gray-800 bg-gray-900 p-3" open={false}>
             <summary className="cursor-pointer text-sm text-gray-200">
-              {log.task} · {log.model || 'unknown'} · {formatLogTime(log.created_at)}
+              {LOG_TASK_LABELS[log.task] || log.task} · {log.model || 'unknown'} · {formatLogTime(log.created_at)}
             </summary>
             <div className="mt-3 space-y-3">
               {log.request && (

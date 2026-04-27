@@ -111,7 +111,7 @@ def detect_topics(
 
     messages = [{"role": "user", "content": prompt}]
     text, model = call_llm(LLMTask.EXTRACT, "", messages)
-    log_model_call(db, user.id, conversation.id, LLMTask.EXTRACT, model, "", messages, text)
+    log_model_call(db, user.id, conversation.id, "categorize_topic", model, "", messages, text)
     data = _parse_json_object(text)
     topics = data.get("topics") or []
     return [
@@ -152,7 +152,7 @@ def summarize_injury_topic(
 
     messages = [{"role": "user", "content": prompt}]
     text, model = call_llm(LLMTask.EXTRACT, "", messages)
-    log_model_call(db, user.id, conversation.id, LLMTask.EXTRACT, model, "", messages, text)
+    log_model_call(db, user.id, conversation.id, "summarize_injury", model, "", messages, text)
     data = _parse_json_object(text)
     return {
         "action": data.get("action") or "none",
