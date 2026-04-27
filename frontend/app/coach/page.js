@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 
@@ -325,8 +327,64 @@ function MessageBubble({ role, content, typing, avatarUrl }) {
             <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
             <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
           </span>
-        ) : <span className="whitespace-pre-wrap">{content}</span>}
+        ) : isCoach ? (
+          <MarkdownMessage content={content} />
+        ) : (
+          <span className="whitespace-pre-wrap">{content}</span>
+        )}
       </div>
     </div>
+  );
+}
+
+function MarkdownMessage({ content }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+        strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+        em: ({ children }) => <em className="italic text-gray-100">{children}</em>,
+        ul: ({ children }) => <ul className="my-2 ml-4 list-disc space-y-1">{children}</ul>,
+        ol: ({ children }) => <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>,
+        li: ({ children }) => <li className="pl-1">{children}</li>,
+        h1: ({ children }) => <h1 className="mb-2 text-base font-semibold text-white">{children}</h1>,
+        h2: ({ children }) => <h2 className="mb-2 text-base font-semibold text-white">{children}</h2>,
+        h3: ({ children }) => <h3 className="mb-2 text-sm font-semibold text-white">{children}</h3>,
+        blockquote: ({ children }) => (
+          <blockquote className="my-2 border-l-2 border-gray-500 pl-3 text-gray-300">
+            {children}
+          </blockquote>
+        ),
+        a: ({ children, href }) => (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="text-orange-300 underline decoration-orange-300/60 underline-offset-2"
+          >
+            {children}
+          </a>
+        ),
+        code: ({ children, className }) => {
+          const inline = !className;
+          if (inline) {
+            return (
+              <code className="rounded bg-gray-950/70 px-1 py-0.5 text-xs text-orange-200">
+                {children}
+              </code>
+            );
+          }
+          return <code className={className}>{children}</code>;
+        },
+        pre: ({ children }) => (
+          <pre className="my-2 overflow-x-auto rounded-lg bg-gray-950 p-3 text-xs leading-relaxed text-gray-200">
+            {children}
+          </pre>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
   );
 }
