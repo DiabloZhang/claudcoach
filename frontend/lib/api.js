@@ -94,6 +94,7 @@ export const api = {
   coachMessage: (convId, content) => apiPost(`/coach/message/${convId}`, { content }),
   coachModelPreference: () => apiFetch('/coach/model-preference'),
   updateCoachModelPreference: (providerOrder) => apiPut('/coach/model-preference', { provider_order: providerOrder }),
+  coachNotes: () => apiFetch('/coach/notes'),
 };
 
 export { getToken, setToken, removeToken };

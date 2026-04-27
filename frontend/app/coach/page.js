@@ -4,6 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 
+const TOPIC_LABELS = {
+  injury: '伤病',
+  recovery: '恢复',
+  schedule: '日程',
+  goal: '目标',
+};
+
 export default function CoachPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -14,6 +21,7 @@ export default function CoachPage() {
   const [sending, setSending] = useState(false);
   const [model, setModel] = useState(null);
   const [providerOrder, setProviderOrder] = useState(['gemini', 'anthropic']);
+  const [topics, setTopics] = useState([]);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
@@ -32,6 +40,7 @@ export default function CoachPage() {
       setMessages(data.messages);
       if (data.model) setModel(data.model);
       if (data.avatar_url) setAvatarUrl(data.avatar_url);
+      if (data.topics) setTopics(data.topics);
       if (pref?.provider_order) setProviderOrder(pref.provider_order);
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -52,6 +61,7 @@ export default function CoachPage() {
       setMessages(prev => [...prev, { role: 'coach', content: res.reply }]);
       if (res.model) setModel(res.model);
       if (res.avatar_url) setAvatarUrl(res.avatar_url);
+      if (res.topics) setTopics(res.topics);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'coach', content: `出错了：${e.message}` }]);
     } finally {
@@ -65,6 +75,7 @@ export default function CoachPage() {
       const data = await api.coachNew();
       setConvId(data.conversation_id);
       setMessages(data.messages);
+      setTopics(data.topics || []);
       if (data.model) setModel(data.model);
       if (data.avatar_url) setAvatarUrl(data.avatar_url);
     } catch (e) {
@@ -131,6 +142,21 @@ export default function CoachPage() {
           </span>
         </div>
       )}
+
+      <div className="min-h-6 pb-2">
+        {topics.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            <span>当前话题</span>
+            {topics.map(topic => (
+              <span key={topic} className="rounded-full border border-gray-700 bg-gray-900 px-2 py-0.5 text-gray-300">
+                {TOPIC_LABELS[topic] || topic}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-gray-700">当前话题尚未识别</div>
+        )}
+      </div>
 
       {/* 输入区 */}
       <div className="py-3 flex gap-2 border-t border-gray-800">

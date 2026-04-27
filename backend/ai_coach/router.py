@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from db.database import get_db
-from db.models import User, Activity, Conversation, Message, UserState
+from db.models import User, Activity, Conversation, ConversationTopic, Message, UserInjury, UserState
 from auth.dependencies import get_current_user
 from ai_coach.coach import (
     get_or_create_persona, build_first_message, chat, extract_structured_data,
@@ -63,6 +63,23 @@ def _set_provider_order(user_id: int, db: Session, order: list[str]) -> list[str
 
 def _user_message_count(conv: Conversation) -> int:
     return sum(1 for msg in conv.messages if msg.role == "user")
+
+
+def _conversation_topic_names(conversation_id: int, db: Session) -> list[str]:
+    rows = (
+        db.query(ConversationTopic)
+        .filter_by(conversation_id=conversation_id)
+        .order_by(ConversationTopic.created_at.desc())
+        .all()
+    )
+    seen = set()
+    names = []
+    for row in rows:
+        if row.topic in seen:
+            continue
+        seen.add(row.topic)
+        names.append(row.topic)
+    return names
 
 
 @router.get("/debug")
@@ -196,6 +213,30 @@ def list_conversations(current_user: User = Depends(get_current_user), db: Sessi
     ]
 
 
+@router.get("/notes")
+def get_coach_notes(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    injuries = (
+        db.query(UserInjury)
+        .filter_by(user_id=current_user.id)
+        .order_by(UserInjury.updated_at.desc())
+        .all()
+    )
+    return {
+        "injuries": [
+            {
+                "id": i.id,
+                "status": i.status,
+                "body_part": i.body_part,
+                "summary": i.summary,
+                "notes": i.notes,
+                "created_at": i.created_at,
+                "updated_at": i.updated_at,
+            }
+            for i in injuries
+        ]
+    }
+
+
 # ── 打开 Coach 页面：返回待处理对话（或新建空对话）──────────
 
 @router.get("/open")
@@ -255,6 +296,7 @@ def open_coach(current_user: User = Depends(get_current_user), db: Session = Dep
         "status": conv.status,
         "model": model_used,
         "avatar_url": persona.avatar_url,
+        "topics": _conversation_topic_names(conv.id, db),
         "messages": [
             {"role": m.role, "content": m.content, "created_at": m.created_at}
             for m in conv.messages
@@ -291,6 +333,7 @@ def new_conversation(current_user: User = Depends(get_current_user), db: Session
         "conversation_id": conv.id,
         "model": model_used,
         "avatar_url": persona.avatar_url,
+        "topics": _conversation_topic_names(conv.id, db),
         "messages": [
             {"role": m.role, "content": m.content, "created_at": m.created_at}
             for m in conv.messages
@@ -358,7 +401,13 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
         except Exception:
             pass
         try:
-            process_conversation_topics(conv, current_user, db, recent_user_messages=5)
+            process_conversation_topics(
+                conv,
+                current_user,
+                db,
+                detect_recent_user_messages=5,
+                summarize_recent_user_messages=20,
+            )
         except Exception:
             pass
 
@@ -369,6 +418,7 @@ def send_message(conversation_id: int, body: ChatInput, db: Session = Depends(ge
         "is_complete": is_done,
         "model": model_used,
         "avatar_url": new_avatar_url,
+        "topics": _conversation_topic_names(conv.id, db),
     }
 
 
@@ -385,9 +435,15 @@ def process_topics_for_conversation(
     if conv.user_id != current_user.id:
         raise HTTPException(403, "无权操作此对话")
 
-    touched = process_conversation_topics(conv, current_user, db)
+    touched = process_conversation_topics(
+        conv,
+        current_user,
+        db,
+        detect_recent_user_messages=5,
+        summarize_recent_user_messages=20,
+    )
     db.commit()
-    return {"conversation_id": conv.id, "topics": touched}
+    return {"conversation_id": conv.id, "topics": touched, "current_topics": _conversation_topic_names(conv.id, db)}
 
 
 # ── 活动同步后创建待处理对话（供 sync 调用）──────────────────

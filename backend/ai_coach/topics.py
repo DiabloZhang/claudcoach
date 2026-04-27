@@ -245,36 +245,32 @@ def process_conversation_topics(
     conversation: Conversation,
     user: User,
     db: Session,
-    recent_user_messages: int | None = None,
+    detect_recent_user_messages: int | None = None,
+    summarize_recent_user_messages: int | None = None,
 ) -> list[str]:
     try:
-        topics = detect_topics(conversation, recent_user_messages)
+        topics = detect_topics(conversation, detect_recent_user_messages)
     except Exception as e:
         logger.warning("Topic detection failed for conversation %s: %s", conversation.id, e)
         return []
 
     touched = []
+    db.query(ConversationTopic).filter_by(conversation_id=conversation.id).delete()
     for topic in topics:
         name = topic["name"]
         confidence = topic["confidence"]
         if confidence < 0.5:
             continue
-        exists = (
-            db.query(ConversationTopic)
-            .filter_by(conversation_id=conversation.id, topic=name)
-            .first()
-        )
-        if not exists:
-            db.add(ConversationTopic(
-                conversation_id=conversation.id,
-                topic=name,
-                confidence=confidence,
-            ))
+        db.add(ConversationTopic(
+            conversation_id=conversation.id,
+            topic=name,
+            confidence=confidence,
+        ))
         touched.append(name)
 
     if "injury" in touched:
         try:
-            update = summarize_injury_topic(conversation, user, db, recent_user_messages)
+            update = summarize_injury_topic(conversation, user, db, summarize_recent_user_messages)
             upsert_user_injury(user, conversation, update, db)
         except Exception as e:
             logger.warning("Injury topic processing failed for conversation %s: %s", conversation.id, e)

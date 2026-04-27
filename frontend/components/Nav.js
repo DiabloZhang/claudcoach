@@ -7,6 +7,7 @@ const links = [
   { href: '/', label: 'Dashboard', icon: '📊' },
   { href: '/activities', label: '训练记录', icon: '🏅' },
   { href: '/coach', label: 'AI 教练', icon: '🤖' },
+  { href: '/coach-notes', label: '教练笔记', icon: '📝' },
   { href: '/sync-logs', label: '同步', icon: '🔄' },
 ];
 
@@ -70,7 +71,7 @@ export default function Nav() {
 
       {/* 手机底部 Tab Bar */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-800">
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-5">
           {links.map(({ href, label, icon }) => {
             const active = pathname === href;
             return (
