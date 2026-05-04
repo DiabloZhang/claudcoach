@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
-import { authApi } from '@/lib/api';
+import { authApi, api } from '@/lib/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
@@ -37,6 +37,7 @@ function SettingsContent() {
       <div className="flex gap-2 border-b border-gray-800">
         {[
           { id: 'profile', label: '个人资料' },
+          { id: 'thresholds', label: '训练阈值' },
           { id: 'password', label: '密码' },
           { id: 'data', label: '数据源' },
         ].map(tab => (
@@ -55,6 +56,7 @@ function SettingsContent() {
       </div>
 
       {activeTab === 'profile' && <ProfileTab user={user} onMsg={setMsg} onError={setError} onRefresh={refreshUser} />}
+      {activeTab === 'thresholds' && <ThresholdsTab user={user} onMsg={setMsg} onError={setError} onRefresh={refreshUser} />}
       {activeTab === 'password' && <PasswordTab onMsg={setMsg} onError={setError} hasPassword={!!user?.has_password} userEmail={user?.email} />}
       {activeTab === 'data' && <DataSourceTab user={user} onMsg={setMsg} onError={setError} onRefresh={refreshUser} />}
     </div>
@@ -230,6 +232,136 @@ function PasswordTab({ onMsg, onError, hasPassword, userEmail }) {
       </button>
     </div>
   );
+}
+
+function ThresholdsTab({ user, onMsg, onError, onRefresh }) {
+  const [ftp, setFtp] = useState(user?.ftp ?? '');
+  const [lthr, setLthr] = useState(user?.lthr ?? '');
+  const [cssMinSec, setCssMinSec] = useState(secondsToMinSec(user?.css));
+  const [runPaceMinSec, setRunPaceMinSec] = useState(secondsToMinSec(user?.run_threshold_pace));
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    setLoading(true);
+    onError('');
+    onMsg('');
+    try {
+      const payload = {};
+      if (ftp !== '' && ftp !== null) payload.ftp = Number(ftp);
+      if (lthr !== '' && lthr !== null) payload.lthr = Number(lthr);
+      const css = minSecToSeconds(cssMinSec);
+      if (css !== null) payload.css = css;
+      const runPace = minSecToSeconds(runPaceMinSec);
+      if (runPace !== null) payload.run_threshold_pace = runPace;
+
+      await api.updateThresholds(payload);
+      onMsg('训练阈值已更新');
+      onRefresh();
+    } catch (e) {
+      onError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-4">
+      <div className="text-sm text-gray-500 mb-2">
+        设置训练阈值后，系统才能正确计算 TSS 等指标。留空表示暂不设置该项。
+      </div>
+
+      <div>
+        <label className="block text-gray-400 text-sm mb-1.5">FTP（功能阈值功率）</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={ftp}
+            onChange={e => setFtp(e.target.value)}
+            placeholder="例如：250"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500"
+          />
+          <span className="text-gray-500 text-sm">瓦特</span>
+        </div>
+        <p className="text-xs text-gray-600 mt-1">骑行用，20分钟全力测试后乘以0.95估算。</p>
+      </div>
+
+      <div>
+        <label className="block text-gray-400 text-sm mb-1.5">LTHR（乳酸阈值心率）</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={lthr}
+            onChange={e => setLthr(e.target.value)}
+            placeholder="例如：165"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500"
+          />
+          <span className="text-gray-500 text-sm">bpm</span>
+        </div>
+        <p className="text-xs text-gray-600 mt-1">骑行/跑步用，30分钟平均心率。</p>
+      </div>
+
+      <div>
+        <label className="block text-gray-400 text-sm mb-1.5">CSS（临界游泳速度）</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={cssMinSec}
+            onChange={e => setCssMinSec(e.target.value)}
+            placeholder="mm:ss，例如：1:35"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500"
+          />
+          <span className="text-gray-500 text-sm">/100m</span>
+        </div>
+        <p className="text-xs text-gray-600 mt-1">游泳用，400米与200米测试后计算得出。</p>
+      </div>
+
+      <div>
+        <label className="block text-gray-400 text-sm mb-1.5">跑步阈值配速</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={runPaceMinSec}
+            onChange={e => setRunPaceMinSec(e.target.value)}
+            placeholder="mm:ss，例如：4:30"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 text-sm focus:outline-none focus:border-orange-500"
+          />
+          <span className="text-gray-500 text-sm">/km</span>
+        </div>
+        <p className="text-xs text-gray-600 mt-1">跑步用，1小时全力跑的平均配速。</p>
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={loading}
+        className="bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 text-white font-medium py-2.5 rounded-lg transition-colors text-sm px-6"
+      >
+        {loading ? '保存中...' : '保存'}
+      </button>
+    </div>
+  );
+}
+
+function secondsToMinSec(seconds) {
+  if (seconds === null || seconds === undefined || seconds === '') return '';
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function minSecToSeconds(str) {
+  if (!str || str.trim() === '') return null;
+  const parts = str.trim().split(':');
+  if (parts.length === 1) {
+    const n = Number(parts[0]);
+    return isNaN(n) ? null : n;
+  }
+  if (parts.length === 2) {
+    const m = Number(parts[0]);
+    const s = Number(parts[1]);
+    if (isNaN(m) || isNaN(s)) return null;
+    return m * 60 + s;
+  }
+  return null;
 }
 
 function DataSourceTab({ user, onMsg, onError, onRefresh }) {
