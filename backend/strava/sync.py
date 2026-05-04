@@ -1,13 +1,13 @@
 import httpx
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from db.models import User, Activity, Stream, SyncLog
 from strava.client import STRAVA_API_BASE, refresh_access_token, is_token_expired
 from analysis.anomalies import detect_anomalies
 
 STREAM_KEYS = "time,heartrate,watts,velocity_smooth,cadence,altitude,distance"
-SYNC_DAYS = 30  # 只同步最近 N 天
+SYNC_DAYS = 90  # 默认同步最近 N 天（覆盖 CTL 42 天窗口 + 前端 90 天趋势图）
 
 
 async def get_valid_token(user: User, db: Session) -> str:
@@ -116,7 +116,7 @@ async def sync_user_activities(user: User, db: Session, since: datetime = None) 
         latest = db.query(Activity).filter(
             Activity.user_id == user.id
         ).order_by(Activity.start_date.desc()).first()
-        since = latest.start_date if latest else datetime(2026, 1, 1)
+        since = latest.start_date if latest else datetime.utcnow() - timedelta(days=SYNC_DAYS)
 
     after = int(since.timestamp())
     sync_from = since

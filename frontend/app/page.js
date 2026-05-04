@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [syncDate, setSyncDate] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [chartHeight, setChartHeight] = useState(420);
 
   const heightOptions = [
@@ -61,7 +62,11 @@ export default function Dashboard() {
 
   const runSync = async (since = null) => {
     setSyncing(true);
-    setSyncMsg('');
+    if (since) {
+      setSyncMsg(`正在同步 ${since} 及之后的数据…`);
+    } else {
+      setSyncMsg('正在同步近 90 天的数据…');
+    }
     try {
       if (since) {
         await api.syncFrom(since);
@@ -90,27 +95,62 @@ export default function Dashboard() {
     <div className="space-y-8">
       {/* 顶部操作栏 */}
       <div className="flex justify-end items-center gap-3 flex-wrap">
-        {syncMsg && <span className="text-sm text-gray-400">{syncMsg}</span>}
-        <input
-          type="date"
-          value={syncDate}
-          onChange={e => setSyncDate(e.target.value)}
-          className="bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2"
-        />
-        <button
-          onClick={() => syncDate ? runSync(syncDate) : alert('请选择日期')}
-          disabled={syncing}
-          className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium transition-colors"
-        >
-          同步指定日期
-        </button>
-        <button
-          onClick={() => runSync()}
-          disabled={syncing}
-          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium transition-colors"
-        >
-          {syncing ? '同步中...' : '立即同步'}
-        </button>
+        {syncMsg && (
+          <span className={`text-sm ${syncMsg.includes('同步中') ? 'text-blue-400' : syncMsg.includes('失败') ? 'text-red-400' : 'text-green-400'}`}>
+            {syncMsg}
+          </span>
+        )}
+        {!showDatePicker ? (
+          <>
+            <button
+              onClick={() => setShowDatePicker(true)}
+              disabled={syncing}
+              className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium transition-colors"
+            >
+              从该日期同步
+            </button>
+            <button
+              onClick={() => runSync()}
+              disabled={syncing}
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium transition-colors"
+            >
+              {syncing ? '同步中...' : '立即同步'}
+            </button>
+          </>
+        ) : (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={syncDate}
+              onChange={e => setSyncDate(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2"
+            />
+            <button
+              onClick={() => {
+                if (syncDate) {
+                  runSync(syncDate);
+                  setShowDatePicker(false);
+                } else {
+                  alert('请选择日期');
+                }
+              }}
+              disabled={syncing}
+              className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-medium transition-colors"
+            >
+              确定
+            </button>
+            <button
+              onClick={() => {
+                setShowDatePicker(false);
+                setSyncDate('');
+              }}
+              disabled={syncing}
+              className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-600 text-gray-300 text-sm font-medium transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 体能状态卡片 */}
