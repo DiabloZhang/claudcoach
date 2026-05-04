@@ -224,9 +224,9 @@ def calc_triathlon_balance(activities: list, days: int = 28) -> dict:
     """
     cutoff = date.today() - timedelta(days=days)
     result = {
-        "swim": {"count": 0, "duration_min": 0, "distance_km": 0},
-        "bike": {"count": 0, "duration_min": 0, "distance_km": 0},
-        "run":  {"count": 0, "duration_min": 0, "distance_km": 0},
+        "swim": {"count": 0, "duration_min": 0.0, "distance_km": 0.0},
+        "bike": {"count": 0, "duration_min": 0.0, "distance_km": 0.0},
+        "run":  {"count": 0, "duration_min": 0.0, "distance_km": 0.0},
     }
 
     for a in activities:

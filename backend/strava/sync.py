@@ -12,12 +12,16 @@ SYNC_DAYS = 90  # 默认同步最近 N 天（覆盖 CTL 42 天窗口 + 前端 90
 
 async def get_valid_token(user: User, db: Session) -> str:
     """获取有效 token，过期则自动刷新"""
-    if is_token_expired(user.token_expires_at):
+    if user.refresh_token is None:
+        raise ValueError("用户未绑定 Strava 账户")
+    if user.token_expires_at is None or is_token_expired(user.token_expires_at):
         data = await refresh_access_token(user.refresh_token)
         user.access_token = data["access_token"]
         user.refresh_token = data["refresh_token"]
         user.token_expires_at = data["expires_at"]
         db.commit()
+    if user.access_token is None:
+        raise ValueError("无法获取有效的 Strava access_token")
     return user.access_token
 
 
@@ -116,7 +120,7 @@ async def sync_user_activities(user: User, db: Session, since: datetime = None) 
         latest = db.query(Activity).filter(
             Activity.user_id == user.id
         ).order_by(Activity.start_date.desc()).first()
-        since = latest.start_date if latest else datetime.utcnow() - timedelta(days=SYNC_DAYS)
+        since = latest.start_date if latest and latest.start_date else datetime.utcnow() - timedelta(days=SYNC_DAYS)
 
     after = int(since.timestamp())
     sync_from = since

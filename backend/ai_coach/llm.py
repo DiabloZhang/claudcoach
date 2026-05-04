@@ -67,7 +67,7 @@ def _call_gemini(task: LLMTask, system: str, messages: list[dict]) -> str:
             max_output_tokens=MAX_TOKENS[task],
         ),
     )
-    return response.text
+    return response.text or ""
 
 
 def _call_anthropic(task: LLMTask, system: str, messages: list[dict]) -> str:
@@ -78,9 +78,10 @@ def _call_anthropic(task: LLMTask, system: str, messages: list[dict]) -> str:
         model=model,
         max_tokens=MAX_TOKENS[task],
         system=system,
-        messages=messages,
+        messages=messages,  # type: ignore[arg-type]
     )
-    return resp.content[0].text
+    block = resp.content[0]
+    return block.text if hasattr(block, "text") else ""
 
 
 def call_llm(task: LLMTask, system: str, messages: list[dict]) -> tuple[str, str]:
