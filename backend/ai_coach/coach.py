@@ -86,7 +86,7 @@ def _build_system_prompt(user: User, persona: CoachPersona, db: Session,
 
 
 def build_first_message(user: User, persona: CoachPersona, db: Session,
-                         activity: Activity = None, ctl=None, atl=None, tsb=None) -> str:
+                         activity: Activity | None = None, ctl=None, atl=None, tsb=None) -> tuple[str, str]:
     system = _build_system_prompt(user, persona, db, activity, ctl, atl, tsb)
     trigger = "帮我看看这条训练数据，生成开场白（1-2句，自然，不要说'当然'之类的废话）" if activity \
               else "主动找运动员聊聊最近状态，生成开场白（1-2句）"
@@ -97,7 +97,7 @@ def build_first_message(user: User, persona: CoachPersona, db: Session,
 
 def chat(conversation: Conversation, user_message: str,
          user: User, persona: CoachPersona, db: Session,
-         ctl=None, atl=None, tsb=None) -> tuple[str, bool]:
+         ctl=None, atl=None, tsb=None) -> tuple[str, bool, str]:
     activity = None
     if conversation.activity_id:
         activity = db.query(Activity).filter_by(id=conversation.activity_id).first()

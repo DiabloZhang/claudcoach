@@ -1,5 +1,9 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Float, DateTime, Text, ForeignKey, JSON, Boolean, UniqueConstraint
-from sqlalchemy.orm import relationship
+from typing import Any
+from sqlalchemy import (
+    Integer, BigInteger, String, Float, DateTime, Text, ForeignKey, JSON, Boolean,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from db.database import Base
 
@@ -7,83 +11,92 @@ from db.database import Base
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # 账户登录信息
-    email = Column(String, unique=True, nullable=True, index=True)
-    password_hash = Column(String, nullable=True)
-    nickname = Column(String, nullable=True)
-    is_active = Column(Boolean, default=True)
-    auth_provider = Column(String, default="password")  # password | strava | both
+    email: Mapped[str | None] = mapped_column(String, unique=True, nullable=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    nickname: Mapped[str | None] = mapped_column(String, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    auth_provider: Mapped[str] = mapped_column(String, default="password")
 
-    # Strava OAuth 信息（保留在 User 表保证向后兼容，也作为主要数据源）
-    strava_athlete_id = Column(Integer, unique=True, nullable=True)
-    access_token = Column(String, nullable=True)
-    refresh_token = Column(String, nullable=True)
-    token_expires_at = Column(Integer, nullable=True)  # unix timestamp
+    # Strava OAuth 信息
+    strava_athlete_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
+    access_token: Mapped[str | None] = mapped_column(String, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(String, nullable=True)
+    token_expires_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # 个人信息
-    firstname = Column(String)
-    lastname = Column(String)
-    profile_pic = Column(String)
+    firstname: Mapped[str | None] = mapped_column(String)
+    lastname: Mapped[str | None] = mapped_column(String)
+    profile_pic: Mapped[str | None] = mapped_column(String)
 
-    # 训练阈值（用于指标计算）
-    ftp = Column(Float)        # 功能阈值功率（骑行，瓦特）
-    lthr = Column(Float)       # 乳酸阈值心率（骑行/跑步，bpm）
-    css = Column(Float)        # 临界游泳速度（游泳，秒/100m）
-    run_threshold_pace = Column(Float)  # 跑步阈值配速（秒/km）
+    # 训练阈值
+    ftp: Mapped[float | None] = mapped_column(Float)
+    lthr: Mapped[float | None] = mapped_column(Float)
+    css: Mapped[float | None] = mapped_column(Float)
+    run_threshold_pace: Mapped[float | None] = mapped_column(Float)
 
     # AI 教练相关
-    timezone = Column(String, default="Asia/Shanghai")
-    sleep_time = Column(String, default="22:00")
+    timezone: Mapped[str] = mapped_column(String, default="Asia/Shanghai")
+    sleep_time: Mapped[str] = mapped_column(String, default="22:00")
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    activities = relationship("Activity", back_populates="user")
-    data_sources = relationship("UserDataSource", back_populates="user", cascade="all, delete-orphan")
-    states = relationship("UserState", back_populates="user", cascade="all, delete-orphan")
+    activities: Mapped[list["Activity"]] = relationship(
+        "Activity", back_populates="user"
+    )
+    data_sources: Mapped[list["UserDataSource"]] = relationship(
+        "UserDataSource", back_populates="user", cascade="all, delete-orphan"
+    )
+    states: Mapped[list["UserState"]] = relationship(
+        "UserState", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class UserDataSource(Base):
-    """用户上游数据源认证信息（支持多数据源）"""
+    """用户上游数据源认证信息"""
     __tablename__ = "user_data_sources"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    provider = Column(String, nullable=False)  # strava, garmin, etc.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
 
-    # 应用级凭证（用户可配置自己的 Strava App）
-    client_id = Column(String, nullable=True)
-    client_secret_encrypted = Column(String, nullable=True)  # Fernet 加密
+    client_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    client_secret_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # 用户级凭证
-    access_token_encrypted = Column(String, nullable=True)   # Fernet 加密
-    refresh_token_encrypted = Column(String, nullable=True)  # Fernet 加密
-    token_expires_at = Column(Integer, nullable=True)        # unix timestamp
-    athlete_id = Column(String, nullable=True)
+    access_token_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)
+    refresh_token_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)
+    token_expires_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    athlete_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # 额外配置
-    settings = Column(JSON, default=dict)
+    settings: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=dict)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    user = relationship("User", back_populates="data_sources")
+    user: Mapped["User"] = relationship("User", back_populates="data_sources")
 
 
 class UserState(Base):
-    """用户状态信息（LLM 上下文、教练记忆等大文本）"""
+    """用户状态信息"""
     __tablename__ = "user_states"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    state_key = Column(String, nullable=False, index=True)   # 如 llm_context, coach_memory
-    state_value = Column(Text, nullable=False)               # 大文本 / JSON 字符串
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    state_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    state_value: Mapped[str] = mapped_column(Text, nullable=False)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    user = relationship("User", back_populates="states")
+    user: Mapped["User"] = relationship("User", back_populates="states")
 
 
 class Activity(Base):
@@ -92,128 +105,138 @@ class Activity(Base):
         UniqueConstraint("user_id", "strava_id", name="uix_activity_user_strava"),
     )
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    strava_id = Column(BigInteger, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    strava_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
-    # 基础信息
-    name = Column(String)
-    sport_type = Column(String)   # Swim / Ride / Run / VirtualRide 等
-    start_date = Column(DateTime)        # UTC
-    start_date_local = Column(DateTime)  # 用户当地时间（展示用）
-    timezone = Column(String)
+    name: Mapped[str | None] = mapped_column(String)
+    sport_type: Mapped[str | None] = mapped_column(String)
+    start_date: Mapped[datetime | None] = mapped_column(DateTime)
+    start_date_local: Mapped[datetime | None] = mapped_column(DateTime)
+    timezone: Mapped[str | None] = mapped_column(String)
 
-    # 运动数据
-    distance = Column(Float)        # 米
-    moving_time = Column(Integer)   # 秒
-    elapsed_time = Column(Integer)  # 秒
-    elevation_gain = Column(Float)  # 米
+    distance: Mapped[float | None] = mapped_column(Float)
+    moving_time: Mapped[int | None] = mapped_column(Integer)
+    elapsed_time: Mapped[int | None] = mapped_column(Integer)
+    elevation_gain: Mapped[float | None] = mapped_column(Float)
 
-    # 心率
-    avg_heart_rate = Column(Float)
-    max_heart_rate = Column(Float)
+    avg_heart_rate: Mapped[float | None] = mapped_column(Float)
+    max_heart_rate: Mapped[float | None] = mapped_column(Float)
 
-    # 骑行功率
-    avg_power = Column(Float)
-    normalized_power = Column(Float)
-    max_power = Column(Float)
+    avg_power: Mapped[float | None] = mapped_column(Float)
+    normalized_power: Mapped[float | None] = mapped_column(Float)
+    max_power: Mapped[float | None] = mapped_column(Float)
 
-    # 跑步
-    avg_cadence = Column(Float)     # 步频
-    avg_pace = Column(Float)        # 秒/km
+    avg_cadence: Mapped[float | None] = mapped_column(Float)
+    avg_pace: Mapped[float | None] = mapped_column(Float)
 
-    # 游泳
-    avg_stroke_rate = Column(Float)
-    pool_length = Column(Float)
+    avg_stroke_rate: Mapped[float | None] = mapped_column(Float)
+    pool_length: Mapped[float | None] = mapped_column(Float)
 
-    # 计算指标
-    tss = Column(Float)             # 训练压力分
-    intensity_factor = Column(Float)
+    tss: Mapped[float | None] = mapped_column(Float)
+    intensity_factor: Mapped[float | None] = mapped_column(Float)
 
-    # 数据质量
-    is_excluded = Column(Boolean, default=False)   # True = 脏数据，排除出计算
-    exclude_reason = Column(String)                # 排除原因（自动检测 or 手动）
-    tss_adjusted = Column(Float, default=0.0)      # 异常数据的修正 TSS（默认0，未来可人工修正为估算值）
+    is_excluded: Mapped[bool] = mapped_column(Boolean, default=False)
+    exclude_reason: Mapped[str | None] = mapped_column(String)
+    tss_adjusted: Mapped[float] = mapped_column(Float, default=0.0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    user = relationship("User", back_populates="activities")
-    streams = relationship("Stream", back_populates="activity", cascade="all, delete-orphan")
+    user: Mapped["User"] = relationship("User", back_populates="activities")
+    streams: Mapped[list["Stream"]] = relationship(
+        "Stream", back_populates="activity", cascade="all, delete-orphan"
+    )
 
 
 class SyncLog(Base):
     __tablename__ = "sync_logs"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    started_at = Column(DateTime, default=datetime.utcnow)
-    sync_from = Column(DateTime)          # 从哪个时间点开始同步
-    activities_synced = Column(Integer, default=0)
-    activities_skipped = Column(Integer, default=0)
-    strava_api_calls = Column(Integer, default=0)
-    duration_seconds = Column(Float)
-    status = Column(String, default="success")   # success / error
-    error_message = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    sync_from: Mapped[datetime | None] = mapped_column(DateTime)
+    activities_synced: Mapped[int] = mapped_column(Integer, default=0)
+    activities_skipped: Mapped[int] = mapped_column(Integer, default=0)
+    strava_api_calls: Mapped[int] = mapped_column(Integer, default=0)
+    duration_seconds: Mapped[float | None] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String, default="success")
+    error_message: Mapped[str | None] = mapped_column(String)
 
 
 class CoachPersona(Base):
     __tablename__ = "coach_personas"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    name = Column(String, default="Coach Alex")
-    personality = Column(Text, default="专业、直接但温暖的铁三教练，有15年执教经验")
-    style = Column(String, default="专业但不冷漠，会用具体数据支撑建议")
-    avatar_url = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), unique=True, nullable=False
+    )
+    name: Mapped[str] = mapped_column(String, default="Coach Alex")
+    personality: Mapped[str] = mapped_column(
+        Text, default="专业、直接但温暖的铁三教练，有15年执教经验"
+    )
+    style: Mapped[str] = mapped_column(String, default="专业但不冷漠，会用具体数据支撑建议")
+    avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class Conversation(Base):
     __tablename__ = "conversations"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=True)  # 关联的训练（可选）
-    trigger = Column(String, default="activity_review")  # activity_review / weekly / alert / chat
-    status = Column(String, default="pending")  # pending / active / complete
-    # 提取的结构化数据
-    training_type = Column(String)   # interval / tempo / aerobic / recovery / long
-    rpe = Column(Integer)            # 1-10
-    body_status = Column(String)     # normal / fatigue / pain / sick
-    life_stress = Column(String)     # none / mild / significant
-    notes = Column(Text)             # 对话摘要
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    activity_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("activities.id"), nullable=True
+    )
+    trigger: Mapped[str] = mapped_column(String, default="activity_review")
+    status: Mapped[str] = mapped_column(String, default="pending")
+    training_type: Mapped[str | None] = mapped_column(String)
+    rpe: Mapped[int | None] = mapped_column(Integer)
+    body_status: Mapped[str | None] = mapped_column(String)
+    life_stress: Mapped[str | None] = mapped_column(String)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    messages = relationship("Message", back_populates="conversation", order_by="Message.id")
+    messages: Mapped[list["Message"]] = relationship(
+        "Message", back_populates="conversation", order_by="Message.id"
+    )
 
 
 class Message(Base):
     __tablename__ = "messages"
 
-    id = Column(Integer, primary_key=True)
-    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
-    role = Column(String, nullable=False)   # "coach" / "user"
-    content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("conversations.id"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    conversation = relationship("Conversation", back_populates="messages")
+    conversation: Mapped["Conversation"] = relationship(
+        "Conversation", back_populates="messages"
+    )
 
 
 class Stream(Base):
     __tablename__ = "streams"
 
-    id = Column(Integer, primary_key=True)
-    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    activity_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("activities.id"), nullable=False
+    )
 
-    # 原始时序数据，存为 JSON 数组（每秒一个点）
-    time = Column(JSON)           # 时间戳列表
-    heart_rate = Column(JSON)     # 心率流
-    watts = Column(JSON)          # 功率流
-    velocity_smooth = Column(JSON)  # 速度流（m/s）
-    cadence = Column(JSON)        # 踏频/步频流
-    altitude = Column(JSON)       # 海拔流
-    distance = Column(JSON)       # 距离流
+    time: Mapped[list[Any] | None] = mapped_column(JSON)
+    heart_rate: Mapped[list[Any] | None] = mapped_column(JSON)
+    watts: Mapped[list[Any] | None] = mapped_column(JSON)
+    velocity_smooth: Mapped[list[Any] | None] = mapped_column(JSON)
+    cadence: Mapped[list[Any] | None] = mapped_column(JSON)
+    altitude: Mapped[list[Any] | None] = mapped_column(JSON)
+    distance: Mapped[list[Any] | None] = mapped_column(JSON)
 
-    activity = relationship("Activity", back_populates="streams")
+    activity: Mapped["Activity"] = relationship("Activity", back_populates="streams")

@@ -88,9 +88,9 @@ def get_persona(current_user: User = Depends(get_current_user), db: Session = De
 
 
 class PersonaUpdate(BaseModel):
-    name: str = None
-    personality: str = None
-    style: str = None
+    name: str | None = None
+    personality: str | None = None
+    style: str | None = None
 
 
 @router.put("/persona")
