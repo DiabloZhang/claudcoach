@@ -10,7 +10,7 @@ from db.models import User, SyncLog, Activity
 from auth.dependencies import get_current_user, get_current_user_optional
 from auth.security import create_access_token
 from strava.client import get_authorization_url, exchange_code
-from strava.sync import sync_user_activities
+from strava.sync import sync_user_activities, SYNC_DAYS
 
 router = APIRouter(prefix="/strava", tags=["strava"])
 
@@ -131,7 +131,11 @@ async def sync(
         raise HTTPException(status_code=400, detail="请先绑定 Strava 账户")
     since_dt = datetime.strptime(since, "%Y-%m-%d") if since else None
     background_tasks.add_task(sync_user_activities, current_user, db, since_dt)
-    return {"message": "同步已开始", "since": since or "最新活动时间起"}
+    return {
+        "message": "同步已开始",
+        "since": since or "最新活动时间起",
+        "default_days": None if since else SYNC_DAYS,
+    }
 
 
 @router.get("/sync-logs")
