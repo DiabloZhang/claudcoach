@@ -19,6 +19,21 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_INJURY_STATUSES = ("active", "recovering")
 COACH_TASKS_KEY = "coach_tasks"
+INJURY_KEYWORDS = (
+    "伤",
+    "疼",
+    "痛",
+    "不适",
+    "康复",
+    "拉伸",
+    "牵拉",
+    "腘绳肌",
+    "肌腱",
+    "膝",
+    "髋",
+    "脚",
+    "足",
+)
 
 
 def _conversation_text(conversation: Conversation, recent_user_messages: int | None = None) -> str:
@@ -39,6 +54,13 @@ def _conversation_text(conversation: Conversation, recent_user_messages: int | N
     )
 
 
+def _user_message_text(conversation: Conversation, recent_user_messages: int | None = None) -> str:
+    messages = [m for m in conversation.messages if m.role == "user"]
+    if recent_user_messages:
+        messages = messages[-recent_user_messages:]
+    return "\n".join(f"运动员：{m.content}" for m in messages)
+
+
 def _parse_json_object(text: str) -> dict:
     cleaned = text.strip()
     if "```" in cleaned:
@@ -51,6 +73,12 @@ def _parse_json_object(text: str) -> dict:
         if start >= 0 and end > start:
             return json.loads(cleaned[start:end + 1])
         raise
+
+
+def _heuristic_topics(text: str) -> list[dict]:
+    if any(keyword in text for keyword in INJURY_KEYWORDS):
+        return [{"name": "injury", "confidence": 0.75}]
+    return []
 
 
 def _active_injuries(user_id: int, db: Session) -> list[UserInjury]:
@@ -86,33 +114,33 @@ def detect_topics(
     db: Session,
     recent_user_messages: int | None = None,
 ) -> list[dict]:
-    history = _conversation_text(conversation, recent_user_messages)
+    history = _user_message_text(conversation, recent_user_messages)
     if not history.strip():
         return []
 
-    prompt = f"""判断以下教练与运动员对话触发了哪些话题。只做轻量分类，不要提取细节。
+    prompt = f"""判断以下运动员最近发言触发了哪些话题。只做轻量分类，不要提取细节。
 
 当前可选 topics：
 - injury：伤病、疼痛、不适、影响训练的身体问题或康复
-- recovery：疲劳、睡眠、恢复、营养、压力
+- recovery：疲劳、睡眠、营养、压力
 - schedule：日程、工作生活协调、训练时间冲突
 - goal：目标赛事、赛季目标、阶段目标
 
-对话：
+运动员最近发言：
 {history}
 
-只返回 JSON：
-{{
-  "topics": [
-    {{"name": "injury", "confidence": 0.0到1.0}}
-  ]
-}}
-如果没有明确话题，返回 {{"topics": []}}。"""
+只返回单行、完整、可解析 JSON，不要 markdown，不要代码块：
+{{"topics":[{{"name":"injury","confidence":0.0}}]}}
+如果没有明确话题，返回 {{"topics":[]}}。"""
 
     messages = [{"role": "user", "content": prompt}]
     text, model = call_llm(LLMTask.EXTRACT, "", messages)
     log_model_call(db, user.id, conversation.id, "categorize_topic", model, "", messages, text)
-    data = _parse_json_object(text)
+    try:
+        data = _parse_json_object(text)
+    except Exception as e:
+        logger.warning("Topic JSON parse failed for conversation %s: %s", conversation.id, e)
+        return _heuristic_topics(history)
     topics = data.get("topics") or []
     return [
         {

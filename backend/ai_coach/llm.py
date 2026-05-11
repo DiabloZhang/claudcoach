@@ -36,7 +36,7 @@ MODELS = {
 MAX_TOKENS = {
     LLMTask.THINK:   2000,
     LLMTask.CHAT:    1800,
-    LLMTask.EXTRACT: 300,
+    LLMTask.EXTRACT: 800,
 }
 
 

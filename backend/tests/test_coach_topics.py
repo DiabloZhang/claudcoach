@@ -149,3 +149,44 @@ def test_injury_topic_summary_failure_creates_fallback_memory(db_session, monkey
     injury = db_session.query(UserInjury).filter_by(user_id=user.id).one()
     assert injury.body_part == "未明确部位"
     assert "自动总结失败" in injury.notes
+
+
+def test_truncated_topic_json_falls_back_to_injury_keyword_detection(db_session, monkeypatch):
+    user = User(email="injury-truncated@example.com", nickname="Injured Athlete")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    conv = Conversation(user_id=user.id, trigger="chat", status="active")
+    db_session.add(conv)
+    db_session.commit()
+    db_session.refresh(conv)
+    db_session.add(Message(
+        conversation_id=conv.id,
+        role="user",
+        content="近端腘绳肌腱疼痛，久坐和跑步蹬地都会痛。",
+    ))
+    db_session.commit()
+
+    def fake_call_llm(task, system, messages):
+        prompt = messages[0]["content"]
+        if "触发了哪些话题" in prompt:
+            return '```json\n{"topics": [\n', "fake-model"
+        return json.dumps({
+            "action": "create_or_update",
+            "status": "active",
+            "body_part": "近端腘绳肌腱",
+            "summary": "近端腘绳肌腱疼痛，久坐和跑步蹬地会加重。",
+            "notes": "分类 JSON 被截断时，关键词兜底仍应进入伤病总结。",
+            "needs_followup": True,
+        }, ensure_ascii=False), "fake-model"
+
+    monkeypatch.setattr(topics, "call_llm", fake_call_llm)
+
+    result = topics.process_conversation_topics(conv, user, db_session)
+    db_session.commit()
+
+    assert result["topics"] == ["injury"]
+    assert result["injury_saved"] is True
+    injury = db_session.query(UserInjury).filter_by(user_id=user.id).one()
+    assert injury.body_part == "近端腘绳肌腱"
